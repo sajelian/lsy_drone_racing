@@ -184,6 +184,7 @@ class DroneRacingWrapper(Wrapper):
             raise InvalidAction(f"Invalid action: {action}")
 
         # Transform the action using a custom action transformer and then adapt it to the firmware
+        raw_action = action
         action = self.action_transformer.transform(raw_action=action, drone_pos=self.observation_parser.drone_pos)
         firmware_action = self.action_transformer.create_firmware_action(action, sim_time=self._sim_time)
         self.env.sendFullStateCmd(*firmware_action)
@@ -207,7 +208,7 @@ class DroneRacingWrapper(Wrapper):
             terminated = True
 
         # Update the observation parser and get the observation.
-        self.observation_parser.update(obs, info)
+        self.observation_parser.update(obs, info, action=action)
         obs = self.observation_parser.get_observation().astype(np.float32)
 
         if self.observation_parser.out_of_bounds():
@@ -218,7 +219,7 @@ class DroneRacingWrapper(Wrapper):
             self._sim_time += self.env.ctrl_dt
 
         # Compute the custom reward
-        reward = self.rewarder.get_custom_reward(self.observation_parser, info)
+        reward = self.rewarder.get_custom_reward(self.observation_parser, info, action=raw_action)
 
         logger.debug("===Step===")
         logger.debug(f"Collision: {pprint.pformat(info['collision'])}")
