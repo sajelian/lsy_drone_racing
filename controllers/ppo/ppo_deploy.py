@@ -42,22 +42,23 @@ class DroneStateMachine:
     def transition(
         self,
         ep_time: float,
-        obs: np.ndarray,
+        obs_parser: ObservationParser,
         info: Dict[str, Any],
     ) -> tuple:
         """Transition states inside state machine.
 
         Args:
             ep_time: current simulation episode time.
-            obs: The new observation array.
+            obs_parser: The new observation parser object.
             info: The new info dict.
         """
         if self.state == DroneState.TAKEOFF:
             self.state = DroneState.POLICY_CONTROL
-            return Command.TAKEOFF, [0.4, 2]
+            drone_takeoff_height = 0.4 if obs_parser.drone_on_ground else obs_parser.drone_pos[2]
+            return Command.TAKEOFF, [drone_takeoff_height, 2.0]
 
         elif self.state == DroneState.POLICY_CONTROL:
-            return self.policy_control(ep_time, obs, info)
+            return self.policy_control(ep_time, obs_parser, info)
 
         elif self.state == DroneState.NOTIFY_SETPOINT_STOP and info["current_gate_id"] == -1:
             self.state = DroneState.GOTO
