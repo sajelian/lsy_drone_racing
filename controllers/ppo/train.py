@@ -22,9 +22,9 @@ logger = logging.getLogger(__name__)
 
 def create_race_env(
     level_path: Path,
-    observation_parser_path: Path = "config/observation_parser/default.yaml",
-    rewarder_path: Path = "config/rewarder/default.yaml",
-    action_transformer_path: Path = "config/action_transformer/default.yaml",
+    observation_parser_path: Path,
+    rewarder_path: Path,
+    action_transformer_path: Path,
     gui: bool = False,
     seed: int = 0,
 ) -> DroneRacingWrapper:
