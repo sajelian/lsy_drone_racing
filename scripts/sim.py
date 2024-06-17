@@ -82,7 +82,7 @@ def simulate(
             controller_args = yaml.safe_load(file)
             # TODO: dont hardcode the observation parser 
             extra_env_args["observation_parser"] = ObservationParser.from_yaml(
-                n_gates=2, n_obstacles=1, file_path=controller_args["observation_parser"]
+                n_gates=4, n_obstacles=4, file_path=controller_args["observation_parser"]
             )
             extra_env_args["action_transformer"] = ActionTransformer.from_yaml(controller_args["action_transformer"])
             extra_env_args["rewarder"] = Rewarder.from_yaml(controller_args["rewarder"])

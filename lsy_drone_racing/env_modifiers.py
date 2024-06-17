@@ -43,6 +43,10 @@ class ObservationParser(ABC):
         self.previous_action: np.array = np.zeros(4)
         self.previous_drone_pos: np.array = None
         self.reference_position: np.array = None
+        self.drone_pos_limits: list = [3.0, 3.0, 2.0]
+        self.drone_pos_space = Box(
+            low=-1.0 * np.array(self.drone_pos_limits), high=np.array(self.drone_pos_limits), dtype=np.float32
+        )
 
     @classmethod
     def from_yaml(cls, n_gates: int, n_obstacles: int, file_path: str) -> ObservationParser:  # noqa: ANN102
@@ -55,9 +59,16 @@ class ObservationParser(ABC):
         """Check if the observation parser is uninitialized."""
         return self.drone_pos is None
 
+    @property
+    def drone_on_ground(self) -> bool:
+        """Check if the drone is on the ground."""
+        return self.drone_pos[2] < 0.1
+
     def out_of_bounds(self) -> bool:
         """Check if the drone is out of bounds."""
-        return not self.observation_space.contains(self.get_observation())
+        not_in_observation_space = not self.observation_space.contains(self.get_observation())
+        not_in_position_space = not self.drone_pos_space.contains(self.drone_pos.astype(np.float32))
+        return not_in_observation_space or not_in_position_space
 
     def update(
         self,
@@ -143,6 +154,10 @@ class ObservationParser(ABC):
     def get_relative_gates(self) -> np.ndarray:
         """Return the relative position of the gates."""
         return self.gates_pos - self.drone_pos
+
+    def __repr__(self) -> str:
+        """Return the string representation of the observation parser."""
+        return f"{self.__class__.__name__}(n_gates={self.n_gates}, n_obstacles={self.n_obstacles})"
 
 
 class ActionObservationParser(ObservationParser):
@@ -348,6 +363,14 @@ class ScaramuzzaObservationParser(ObservationParser):
         obs_limits_low = np.concatenate([-obs_limits_high[:-1], [-1]])
         self.observation_space = Box(obs_limits_low, obs_limits_high, dtype=np.float32)
 
+    def __repr__(self) -> str:
+        """Return the string representation of the observation parser."""
+        obs = self.get_observation()
+        return f"{self.__class__.__name__} Obs space: {self.observation_space}, \
+                observation size: {obs.size}, \
+                drone_speed: {obs[0:3]}, drone_rpy: {obs[3:6]}, \
+                relative corners and obstacles {obs[6:-1]}, gate_id: {obs[-1]}"
+
     def get_shortname(self) -> str:
         """Return shortname to identify learned model after training."""
         return "sca"
@@ -498,7 +521,6 @@ def make_observation_parser(
     """
     type = data["type"]
     if type == "action":
-        logger.info("Using ActionObservationParser")
         return ActionObservationParser(n_gates, n_obstacles, **data)
     if type == "minimal":
         return MinimalObservationParser(n_gates, n_obstacles, **data)
@@ -590,11 +612,7 @@ class Rewarder:
         return self.shortname
 
     def get_custom_reward(
-        self,
-        obs_parser: ObservationParser,
-        info: dict,
-        terminated: bool = False,
-        action: np.ndarray = None
+        self, obs_parser: ObservationParser, info: dict, terminated: bool = False, action: np.ndarray = None
     ) -> float:
         """Compute the custom reward.
 
