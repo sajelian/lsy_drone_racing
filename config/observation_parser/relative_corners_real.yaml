@@ -1,0 +1,4 @@
+type: "relative_corners"
+speed_estimator:
+  type: "differential"
+  params: {}

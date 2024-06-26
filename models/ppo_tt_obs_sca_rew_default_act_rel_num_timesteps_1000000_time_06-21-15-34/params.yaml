@@ -1,0 +1,8 @@
+action_transformer: config/action_transformer/medium.yaml
+gui: true
+level: config/level/train4_deployment.yaml
+model_name: models/ppo_tt_obs_sca_rew_default_act_rel_num_timesteps_1000000_time_06-21-15-34/best_model/best_model
+num_timesteps: 1000000
+observation_parser: config/observation_parser/scaramuzza.yaml
+rewarder: config/rewarder/beta_june07_rewarder.yaml
+seed: 0

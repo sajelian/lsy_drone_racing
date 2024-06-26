@@ -550,6 +550,11 @@ class Rewarder:
         z_penalty_threshold: float = 1.5,
         action_smoothness: float = 1e-4,
         body_rate_penalty: float = -1e-3,
+        speed_threshold: float = np.inf,
+        speed_penalty: float = -1e-3,
+        angular_speed_threshold: float = np.inf,
+        angular_speed_penalty: float = -1e-3,
+        hovering_goal: list = None,
         shortname: str = "default",
     ):
         """Initialize the rewarder."""
@@ -563,6 +568,11 @@ class Rewarder:
         self.z_penalty_threshold = z_penalty_threshold
         self.action_smoothness = action_smoothness
         self.body_rate_penalty = body_rate_penalty
+        self.speed_threshold = speed_threshold
+        self.speed_penalty = speed_penalty
+        self.angular_speed_threshold = angular_speed_threshold
+        self.angular_speed_penalty = angular_speed_penalty
+        self.hovering_goal = np.array(hovering_goal) if hovering_goal is not None else None
 
         # Check that all are floats
         for attr in [
@@ -576,6 +586,10 @@ class Rewarder:
             "z_penalty_threshold",
             "action_smoothness",
             "body_rate_penalty",
+            "speed_threshold",
+            "speed_penalty",
+            "angular_speed_threshold",
+            "angular_speed_penalty",
         ]:
             if not isinstance(getattr(self, attr), float):
                 raise ValueError(f"{attr} must be a float.")
@@ -641,6 +655,10 @@ class Rewarder:
         if info["task_completed"]:
             return self.end_reached
 
+        if self.hovering_goal is not None:
+            reward += np.exp(-np.linalg.norm(obs_parser.drone_pos - self.hovering_goal))
+            return reward
+
         if obs_parser.gate_id == -1:
             # Reward for getting closer to the reference position
             dist_to_ref = np.linalg.norm(obs_parser.drone_pos - obs_parser.reference_position)
@@ -656,8 +674,11 @@ class Rewarder:
         if obs_parser.drone_pos[2] > self.z_penalty_threshold:
             reward += self.z_penalty
 
-        body_rate_penality = np.linalg.norm(obs_parser.drone_angular_speed) * self.body_rate_penalty
-        reward += body_rate_penality
+        if np.linalg.norm(obs_parser.drone_angular_speed) > self.angular_speed_threshold:
+            reward += self.angular_speed_penalty * np.linalg.norm(obs_parser.drone_angular_speed)
+
+        if np.linalg.norm(obs_parser.drone_speed) > self.speed_threshold:
+            reward += self.speed_penalty * np.linalg.norm(obs_parser.drone_speed)
 
         if action is not None:
             reward += -np.linalg.norm(action - obs_parser.previous_action) * self.action_smoothness
@@ -666,22 +687,6 @@ class Rewarder:
             reward += self.gate_reached
 
         return reward
-
-
-def map_reward_to_color(reward: float) -> str:
-    """Convert the reward to a color.
-
-    We use a red-green color map, where red indicates a negative reward and green a positive reward.
-
-    Args:
-        reward: The reward.
-
-    Returns:
-        The color.
-    """
-    if reward < 0:
-        return "red"
-    return "green"
 
 
 class ActionTransformer(ABC):

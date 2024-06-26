@@ -1,0 +1,8 @@
+action_transformer: config/action_transformer/medium.yaml
+gui: false
+level: config/level/train5.yaml
+model_name: models/ppo_t5_obs_rel_corners_rew_default_act_rel_num_timesteps_1000000_time_06-21-16-32/best_model/best_model
+num_timesteps: 1000000
+observation_parser: config/observation_parser/relative_corners.yaml
+rewarder: config/rewarder/beta_june07_rewarder.yaml
+seed: 0
