@@ -34,6 +34,7 @@ class DroneStateMachine:
             action_transformer: The action transformer object.
         """
         self.state = DroneState.TAKEOFF
+        self.take_of_duration = 5.0
         self.goal = initial_goal
         self.model = model
         self.action_transformer = action_transformer
@@ -55,7 +56,7 @@ class DroneStateMachine:
         if self.state == DroneState.TAKEOFF:
             self.state = DroneState.POLICY_CONTROL
             drone_takeoff_height = 0.4 if obs_parser.drone_on_ground else obs_parser.drone_pos[2]
-            return Command.TAKEOFF, [drone_takeoff_height, 2.0]
+            return Command.TAKEOFF, [drone_takeoff_height, self.take_of_duration]
 
         elif self.state == DroneState.POLICY_CONTROL:
             return self.policy_control(ep_time, obs_parser, info)
@@ -86,15 +87,19 @@ class DroneStateMachine:
             The command type and arguments to be sent to the quadrotor. See `Command`.
         """
         gate_id = info["current_gate_id"] if "current_gate_id" in info.keys() else info["current_target_gate_id"]
-        if ep_time - 2 > 0 and gate_id != -1:
+        if gate_id != -1:
             if isinstance(obs, ObservationParser):
                 drone_pos = obs.drone_pos
+                drone_yaw = obs.drone_yaw
                 obs = obs.get_observation()
             else:
                 drone_pos = obs[:3]
+                drone_yaw = None
 
             action, next_predicted_state = self.model.predict(obs, deterministic=True)
-            transformed_action = self.action_transformer.transform(raw_action=action, drone_pos=drone_pos)
+            transformed_action = self.action_transformer.transform(
+                raw_action=action, drone_pos=drone_pos, drone_yaw=drone_yaw
+            )
             firmware_action = self.action_transformer.create_firmware_action(transformed_action, sim_time=ep_time)
             command_type = Command.FULLSTATE
             return command_type, firmware_action

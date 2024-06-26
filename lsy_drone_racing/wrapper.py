@@ -185,7 +185,9 @@ class DroneRacingWrapper(Wrapper):
 
         # Transform the action using a custom action transformer and then adapt it to the firmware
         raw_action = action
-        action = self.action_transformer.transform(raw_action=action, drone_pos=self.observation_parser.drone_pos)
+        action = self.action_transformer.transform(
+            raw_action=action, drone_pos=self.observation_parser.drone_pos, drone_yaw=self.observation_parser.drone_yaw
+        )
         firmware_action = self.action_transformer.create_firmware_action(action, sim_time=self._sim_time)
         self.env.sendFullStateCmd(*firmware_action)
 
@@ -275,8 +277,10 @@ class DroneRacingObservationWrapper:
             raise TypeError(f"`env` must be an instance of `FirmwareWrapper`, is {type(env)}")
         self.env = env
         self.pyb_client_id: int = env.env.PYB_CLIENT
-        self.observation_parser = observation_parser if observation_parser else RelativePositionObservationParser(
-            n_gates=env.env.NUM_GATES, n_obstacles=env.env.n_obstacles
+        self.observation_parser = (
+            observation_parser
+            if observation_parser
+            else RelativePositionObservationParser(n_gates=env.env.NUM_GATES, n_obstacles=env.env.n_obstacles)
         )
         self.rewarder = rewarder if rewarder else Rewarder()
         self.action_transformer = action_transformer if action_transformer else RelativeActionTransformer()
