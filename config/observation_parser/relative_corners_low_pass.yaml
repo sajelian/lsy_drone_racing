@@ -1,0 +1,6 @@
+type: "relative_corners"
+
+speed_estimator:
+  type: "low_pass"
+  params:
+    alpha: 0.95

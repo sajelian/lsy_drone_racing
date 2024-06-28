@@ -22,7 +22,7 @@ from munch import Munch, munchify
 from safe_control_gym.utils.registration import make
 from safe_control_gym.utils.utils import sync
 
-from lsy_drone_racing.command import apply_sim_command
+from lsy_drone_racing.command import Command, apply_sim_command
 from lsy_drone_racing.constants import FIRMWARE_FREQ
 from lsy_drone_racing.env_modifiers import ActionTransformer, ObservationParser, Rewarder
 from lsy_drone_racing.utils import load_controller
@@ -82,7 +82,7 @@ def simulate(
             controller_args = yaml.safe_load(file)
             # TODO: dont hardcode the observation parser 
             extra_env_args["observation_parser"] = ObservationParser.from_yaml(
-                n_gates=2, n_obstacles=1, file_path=controller_args["observation_parser"]
+                n_gates=4, n_obstacles=4, file_path=controller_args["observation_parser"]
             )
             extra_env_args["action_transformer"] = ActionTransformer.from_yaml(controller_args["action_transformer"])
             extra_env_args["rewarder"] = Rewarder.from_yaml(controller_args["rewarder"])
@@ -142,8 +142,12 @@ def simulate(
             command_type, args = ctrl.compute_control(curr_time, env.observation_parser, reward, done, info)
             # Apply the control input to the drone. This is a deviation from the gym API as the
             # action is not applied in env.step()
+            applied_transformed_action = None
+            if command_type == Command.FULLSTATE:
+                applied_transformed_action = [*(args[0].tolist()), args[3]]
             apply_sim_command(env, command_type, args)
-            obs, reward, done, info, action = env.step(curr_time, action)
+            kwargs = {"applied_transformed_action": applied_transformed_action} if applied_transformed_action else {}
+            obs, reward, done, info, action = env.step(sim_time=curr_time, action=action, **kwargs)
             # Update the controller internal state and models.
             ctrl.step_learn(action, obs, reward, done, info)
             # Add up reward, collisions, violations.

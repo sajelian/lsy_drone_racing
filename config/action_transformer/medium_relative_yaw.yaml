@@ -1,0 +1,5 @@
+type: "relative"
+pos_scaling: [0.4, 0.4, 0.4]
+yaw_scaling: 0.1
+yaw_relative: True
+shortname: "med_ry"

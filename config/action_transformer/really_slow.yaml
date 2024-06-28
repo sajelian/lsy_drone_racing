@@ -1,0 +1,5 @@
+type: "relative"
+pos_scaling: [0.05, 0.05, 0.05]
+yaw_scaling: 0.005
+yaw_relative: True
+shortname: "really_slow"

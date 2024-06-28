@@ -13,6 +13,7 @@ import logging
 import pickle
 import time
 from dataclasses import asdict
+from functools import partial
 from pathlib import Path
 
 import fire
@@ -34,11 +35,14 @@ from lsy_drone_racing.constants import (
     ObstacleDesc,
     QuadrotorPhysicParams,
 )
+from lsy_drone_racing.env_modifiers import ActionTransformer, ObservationParser, Rewarder
 from lsy_drone_racing.import_utils import get_ros_package_path, pycrazyswarm
 from lsy_drone_racing.utils import check_gate_pass, load_controller
 from lsy_drone_racing.vicon import Vicon
+from lsy_drone_racing.wrapper import DroneRacingObservationWrapper
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 
 def create_init_info(
@@ -86,6 +90,7 @@ def create_init_info(
 def main(
     config: str = "config/train0_standard.yaml",
     controller: str = "controllers/ppo/ppo.py",
+    controller_params: str = "models/working_model/params.yaml",
 ):
     """Deployment script to run the controller on the real drone."""
     start_time = time.time()
@@ -131,8 +136,26 @@ def main(
             raise ValueError("Gates can't have roll or pitch!")
     obstacle_poses = config.quadrotor_config.obstacles
 
+    controller_args = {}
+    extra_env_args = {}
+    observation_parser = None
+    if controller == "controllers/ppo/ppo.py":
+        # Load the controller parameters
+        path = Path(__file__).parents[1] / controller_params
+        assert path.exists(), f"Controller parameters file not found: {path}, and needed for PPO."
+        with open(path, "r") as file:
+            controller_args = yaml.safe_load(file)
+            # TODO: dont hardcode the observation parser
+            extra_env_args["observation_parser"] = ObservationParser.from_yaml(
+                n_gates=4, n_obstacles=4, file_path=controller_args["observation_parser"]
+            )
+            observation_parser = extra_env_args["observation_parser"]
+            extra_env_args["action_transformer"] = ActionTransformer.from_yaml(controller_args["action_transformer"])
+            extra_env_args["rewarder"] = Rewarder.from_yaml(controller_args["rewarder"])
+
     # Create a safe-control-gym environment from which to take the symbolic models
     config.quadrotor_config["ctrl_freq"] = FIRMWARE_FREQ
+
     env = make("quadrotor", **config.quadrotor_config)
     _, env_info = env.reset()
 
@@ -144,15 +167,12 @@ def main(
     constraint_values = env.constraints.get_values(env, only_state=True)
     x_reference = config.quadrotor_config.task_info.stabilization_goal
 
-    init_info = create_init_info(
-        env_info, gate_poses, obstacle_poses, constraint_values, x_reference
-    )
-
+    init_info = create_init_info(env_info, gate_poses, obstacle_poses, constraint_values, x_reference)
     CTRL_FREQ = init_info["ctrl_freq"]
 
     # Create controller
     vicon_obs = drone_pos_and_vel + drone_rot_and_agl_vel + [0]
-    ctrl = Controller(vicon_obs, init_info, True)
+    ctrl = Controller(vicon_obs, init_info, verbose=True, **controller_args)
 
     # Helper parameters
     target_gate_id = 0  # Initial gate.
@@ -160,6 +180,20 @@ def main(
     last_drone_pos = vicon.pos[vicon.drone_name].copy()  # Gate crossing helper
     completed = False
     print(f"Setup time: {time.time() - start_time:.3}s")
+
+    modified_gate_poses = []
+    for gate in gate_poses:
+        height = 1.0 if gate[-1] else 0.525
+        modified_gate = [gate[0], gate[1], height, 0, 0, gate[5]]
+        modified_gate_poses.append(modified_gate)
+
+    init_info["gates_pose"] = np.array(modified_gate_poses)
+    init_info["obstacles_pose"] = np.array(obstacle_poses)
+    init_info["current_gate_id"] = target_gate_id
+    init_info["obstacles_in_range"] = False
+    init_info["gates_in_range"] = False
+
+    observation_parser.update(obs=vicon_obs, info=init_info, initial=True)
 
     try:
         # Run the main control loop
@@ -198,11 +232,15 @@ def main(
                 "constraint_values": constraint_values,
                 "constraint_violation": cnstr_num,
             }
+            # EXTRA STUFF TO MATCH OUR OBS PARSER
 
+            info["gates_pose"] = np.array(modified_gate_poses)
+            info["obstacles_pose"] = np.array(obstacle_poses)
+            info["current_gate_id"] = target_gate_id
+            info["obstacles_in_range"] = False
+            info["gates_in_range"] = False
             # Check if the drone has passed the current gate
-            if check_gate_pass(
-                gate_poses[target_gate_id], vicon.pos[vicon.drone_name], last_drone_pos
-            ):
+            if check_gate_pass(gate_poses[target_gate_id], vicon.pos[vicon.drone_name], last_drone_pos):
                 target_gate_id += 1
                 print(f"Gate {target_gate_id} passed in {curr_time:.4}s")
             last_drone_pos = vicon.pos[vicon.drone_name].copy()
@@ -213,12 +251,16 @@ def main(
 
             # Get the latest vicon observation and call the controller
             p = vicon.pos[vicon.drone_name]
-            drone_pos_and_vel = [p[0], 0, p[1], 0, p[2], 0]
+            v = vicon.vel[vicon.drone_name]
+            drone_pos_and_vel = [p[0], v[0], p[1], v[1], p[2], v[2]]
             r = vicon.rpy[vicon.drone_name]
-            drone_rot_and_agl_vel = [r[0], r[1], r[2], 0, 0, 0]
+            w = vicon.ang_vel[vicon.drone_name]
+            drone_rot_and_agl_vel = [r[0], r[1], r[2], w[0], w[1], w[2]]
             vicon_obs = drone_pos_and_vel + drone_rot_and_agl_vel + [info["current_target_gate_id"]]
+            observation_parser.update(obs=vicon_obs, info=info)
             # In sim2real: Reward always 0, done always false
-            command_type, args = ctrl.compute_control(curr_time, vicon_obs, 0, False, info)
+
+            command_type, args = ctrl.compute_control(curr_time, observation_parser, 0, False, info)
             log_cmd.append([curr_time, rospy.get_time(), command_type, args])  # Save for logging
 
             apply_command(cf, command_type, args)  # Send the command to the drone controller
@@ -234,8 +276,9 @@ def main(
         with open(save_dir / "log.pkl", "wb") as f:
             pickle.dump(log_cmd, f)
     finally:
-        apply_command(cf, Command.NOTIFYSETPOINTSTOP, [])
-        apply_command(cf, Command.LAND, [0.0, 2.0])  # Args are height and duration
+        # apply_command(cf, Command.NOTIFYSETPOINTSTOP, [])
+        # apply_command(cf, Command.LAND, [0.0, 2.0])  # Args are height and duration
+        None
 
 
 if __name__ == "__main__":

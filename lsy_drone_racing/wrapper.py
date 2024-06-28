@@ -184,7 +184,8 @@ class DroneRacingWrapper(Wrapper):
             raise InvalidAction(f"Invalid action: {action}")
 
         # Transform the action using a custom action transformer and then adapt it to the firmware
-        action = self.action_transformer.transform(raw_action=action, drone_pos=self.observation_parser.drone_pos)
+        raw_action = action
+        action = self.action_transformer.transform(raw_action=action, obs_parser=self.observation_parser)
         firmware_action = self.action_transformer.create_firmware_action(action, sim_time=self._sim_time)
         self.env.sendFullStateCmd(*firmware_action)
 
@@ -207,7 +208,7 @@ class DroneRacingWrapper(Wrapper):
             terminated = True
 
         # Update the observation parser and get the observation.
-        self.observation_parser.update(obs, info)
+        self.observation_parser.update(obs, info, action=action)
         obs = self.observation_parser.get_observation().astype(np.float32)
 
         if self.observation_parser.out_of_bounds():
@@ -218,7 +219,7 @@ class DroneRacingWrapper(Wrapper):
             self._sim_time += self.env.ctrl_dt
 
         # Compute the custom reward
-        reward = self.rewarder.get_custom_reward(self.observation_parser, info)
+        reward = self.rewarder.get_custom_reward(self.observation_parser, info, action=raw_action)
 
         logger.debug("===Step===")
         logger.debug(f"Collision: {pprint.pformat(info['collision'])}")
@@ -274,8 +275,10 @@ class DroneRacingObservationWrapper:
             raise TypeError(f"`env` must be an instance of `FirmwareWrapper`, is {type(env)}")
         self.env = env
         self.pyb_client_id: int = env.env.PYB_CLIENT
-        self.observation_parser = observation_parser if observation_parser else RelativePositionObservationParser(
-            n_gates=env.env.NUM_GATES, n_obstacles=env.env.n_obstacles
+        self.observation_parser = (
+            observation_parser
+            if observation_parser
+            else RelativePositionObservationParser(n_gates=env.env.NUM_GATES, n_obstacles=env.env.n_obstacles)
         )
         self.rewarder = rewarder if rewarder else Rewarder()
         self.action_transformer = action_transformer if action_transformer else RelativeActionTransformer()
@@ -320,7 +323,9 @@ class DroneRacingObservationWrapper:
 
         return obs, info
 
-    def step(self, *args: Any, **kwargs: dict[str, Any]) -> tuple[np.ndarray, float, bool, dict, np.ndarray]:
+    def step(
+        self, sim_time: float, action: np.array, *args: Any, **kwargs: dict[str, Any]
+    ) -> tuple[np.ndarray, float, bool, dict, np.ndarray]:
         """Take a step in the current environment.
 
         Args:
@@ -334,8 +339,8 @@ class DroneRacingObservationWrapper:
             info: The info dictionary.
             action: The action taken by the agent in the firmware format.
         """
-        obs, reward, done, info, action = self.env.step(*args, **kwargs)
-        self.observation_parser.update(obs, info)
+        obs, reward, done, info, action = self.env.step(sim_time, action)
+        self.observation_parser.update(obs, info, action=kwargs.get("applied_transformed_action", None))
         obs = self.observation_parser.get_observation().astype(np.float32)
 
         reward = self.rewarder.get_custom_reward(self.observation_parser, info)

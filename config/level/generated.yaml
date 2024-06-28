@@ -1,0 +1,399 @@
+num_episodes: 5
+quadrotor_config:
+  camera_view:
+  - 5
+  - -40
+  - -40
+  - 0.5
+  - -1
+  - 0.5
+  constraints:
+  - constrained_variable: input
+    constraint_form: default_constraint
+  - active_dims:
+    - 0
+    - 2
+    - 4
+    constrained_variable: state
+    constraint_form: bounded_constraint
+    lower_bounds:
+    - -3
+    - -3
+    - -0.1
+    upper_bounds:
+    - 3
+    - 3
+    - 2
+  cost: rl_reward
+  ctrl_freq: 30
+  done_on_collision: true
+  done_on_completion: true
+  done_on_out_of_bound: false
+  done_on_violation: true
+  episode_len_sec: 33
+  gates:
+  - - -1.0836507926128163
+    - 3.0052404242482256
+    - 0.0
+    - 0.0
+    - 0.0
+    - !!python/object/apply:numpy.core.multiarray.scalar
+      - &id001 !!python/object/apply:numpy.dtype
+        args:
+        - f8
+        - false
+        - true
+        state: !!python/tuple
+        - 3
+        - <
+        - null
+        - null
+        - null
+        - -1
+        - -1
+        - 0
+      - !!binary |
+        iCAgul7Czz8=
+    - 0
+  - - -1.9287470493603522
+    - 3.5188664842129427
+    - 0.0
+    - 0.0
+    - 0.0
+    - !!python/object/apply:numpy.core.multiarray.scalar
+      - *id001
+      - !!binary |
+        /BOsosxYwr8=
+    - 0
+  - - -1.9984782245873847
+    - 4.42962001701511
+    - 0.0
+    - 0.0
+    - 0.0
+    - !!python/object/apply:numpy.core.multiarray.scalar
+      - *id001
+      - !!binary |
+        0KB0bPSP4L8=
+    - 1
+  - - -1.5427100223879566
+    - 5.436663056625271
+    - 0.0
+    - 0.0
+    - 0.0
+    - !!python/object/apply:numpy.core.multiarray.scalar
+      - *id001
+      - !!binary |
+        BgwRYSBh7r8=
+    - 0
+  - - -1.1094747241902094
+    - 6.378735119930858
+    - 0.0
+    - 0.0
+    - 0.0
+    - !!python/object/apply:numpy.core.multiarray.scalar
+      - *id001
+      - !!binary |
+        KmMDMY8c+b8=
+    - 0
+  gui: false
+  info_in_reset: true
+  init_state:
+  - - -0.9706640566814482
+    - 0.0
+    - 1.9837603731726094
+    - 0.0
+    - 1.0
+    - 0.0
+    - !!python/object/apply:numpy.core.multiarray._reconstruct
+      args:
+      - &id002 !!python/name:numpy.ndarray ''
+      - !!python/tuple
+        - 0
+      - !!binary |
+        Yg==
+      state: !!python/tuple
+      - 1
+      - !!python/tuple
+        - 2
+      - *id001
+      - false
+      - !!binary |
+        AAAAAAAAAAAAAAAAAAAAAA==
+    - 0.0
+    - !!python/object/apply:numpy.core.multiarray._reconstruct
+      args:
+      - *id002
+      - !!python/tuple
+        - 0
+      - !!binary |
+        Yg==
+      state: !!python/tuple
+      - 1
+      - !!python/tuple
+        - 3
+      - *id001
+      - false
+      - !!binary |
+        AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+    - 0
+  - - -1.0836507926128163
+    - 0.0
+    - 3.0052404242482256
+    - 0.0
+    - 1.0
+    - 0.0
+    - !!python/object/apply:numpy.core.multiarray._reconstruct
+      args:
+      - *id002
+      - !!python/tuple
+        - 0
+      - !!binary |
+        Yg==
+      state: !!python/tuple
+      - 1
+      - !!python/tuple
+        - 2
+      - *id001
+      - false
+      - !!binary |
+        AAAAAAAAAAAAAAAAAAAAAA==
+    - !!python/object/apply:numpy.core.multiarray.scalar
+      - *id001
+      - !!binary |
+        iCAgul7Czz8=
+    - !!python/object/apply:numpy.core.multiarray._reconstruct
+      args:
+      - *id002
+      - !!python/tuple
+        - 0
+      - !!binary |
+        Yg==
+      state: !!python/tuple
+      - 1
+      - !!python/tuple
+        - 3
+      - *id001
+      - false
+      - !!binary |
+        AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+    - 1
+  - - -1.9287470493603522
+    - 0.0
+    - 3.5188664842129427
+    - 0.0
+    - 1.0
+    - 0.0
+    - !!python/object/apply:numpy.core.multiarray._reconstruct
+      args:
+      - *id002
+      - !!python/tuple
+        - 0
+      - !!binary |
+        Yg==
+      state: !!python/tuple
+      - 1
+      - !!python/tuple
+        - 2
+      - *id001
+      - false
+      - !!binary |
+        AAAAAAAAAAAAAAAAAAAAAA==
+    - !!python/object/apply:numpy.core.multiarray.scalar
+      - *id001
+      - !!binary |
+        /BOsosxYwr8=
+    - !!python/object/apply:numpy.core.multiarray._reconstruct
+      args:
+      - *id002
+      - !!python/tuple
+        - 0
+      - !!binary |
+        Yg==
+      state: !!python/tuple
+      - 1
+      - !!python/tuple
+        - 3
+      - *id001
+      - false
+      - !!binary |
+        AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+    - 2
+  - - -1.9984782245873847
+    - 0.0
+    - 4.42962001701511
+    - 0.0
+    - 0.525
+    - 0.0
+    - !!python/object/apply:numpy.core.multiarray._reconstruct
+      args:
+      - *id002
+      - !!python/tuple
+        - 0
+      - !!binary |
+        Yg==
+      state: !!python/tuple
+      - 1
+      - !!python/tuple
+        - 2
+      - *id001
+      - false
+      - !!binary |
+        AAAAAAAAAAAAAAAAAAAAAA==
+    - !!python/object/apply:numpy.core.multiarray.scalar
+      - *id001
+      - !!binary |
+        0KB0bPSP4L8=
+    - !!python/object/apply:numpy.core.multiarray._reconstruct
+      args:
+      - *id002
+      - !!python/tuple
+        - 0
+      - !!binary |
+        Yg==
+      state: !!python/tuple
+      - 1
+      - !!python/tuple
+        - 3
+      - *id001
+      - false
+      - !!binary |
+        AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+    - 3
+  - - -1.5427100223879566
+    - 0.0
+    - 5.436663056625271
+    - 0.0
+    - 1.0
+    - 0.0
+    - !!python/object/apply:numpy.core.multiarray._reconstruct
+      args:
+      - *id002
+      - !!python/tuple
+        - 0
+      - !!binary |
+        Yg==
+      state: !!python/tuple
+      - 1
+      - !!python/tuple
+        - 2
+      - *id001
+      - false
+      - !!binary |
+        AAAAAAAAAAAAAAAAAAAAAA==
+    - !!python/object/apply:numpy.core.multiarray.scalar
+      - *id001
+      - !!binary |
+        BgwRYSBh7r8=
+    - !!python/object/apply:numpy.core.multiarray._reconstruct
+      args:
+      - *id002
+      - !!python/tuple
+        - 0
+      - !!binary |
+        Yg==
+      state: !!python/tuple
+      - 1
+      - !!python/tuple
+        - 3
+      - *id001
+      - false
+      - !!binary |
+        AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+    - 4
+  init_state_randomization_info:
+    init_phi:
+      distrib: uniform
+      high: 0.1
+      low: -0.1
+    init_psi:
+      distrib: uniform
+      high: 0.1
+      low: -0.1
+    init_theta:
+      distrib: uniform
+      high: 0.1
+      low: -0.1
+    init_x:
+      distrib: uniform
+      high: 0.1
+      low: -0.1
+    init_y:
+      distrib: uniform
+      high: 0.1
+      low: -0.1
+    init_z:
+      distrib: uniform
+      high: 0.02
+      low: 0.0
+  normalized_rl_action_space: false
+  obstacles:
+  - - !!python/object/apply:numpy.core.multiarray.scalar
+      - *id001
+      - !!binary |
+        AAAAAAAAAAA=
+    - !!python/object/apply:numpy.core.multiarray.scalar
+      - *id001
+      - !!binary |
+        AAAAAAAAAAA=
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - !!python/object/apply:numpy.core.multiarray.scalar
+      - *id001
+      - !!binary |
+        AAAAAAAAAAA=
+    - !!python/object/apply:numpy.core.multiarray.scalar
+      - *id001
+      - !!binary |
+        AAAAAAAAAAA=
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - !!python/object/apply:numpy.core.multiarray.scalar
+      - *id001
+      - !!binary |
+        AAAAAAAAAAA=
+    - !!python/object/apply:numpy.core.multiarray.scalar
+      - *id001
+      - !!binary |
+        AAAAAAAAAAA=
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - !!python/object/apply:numpy.core.multiarray.scalar
+      - *id001
+      - !!binary |
+        AAAAAAAAAAA=
+    - !!python/object/apply:numpy.core.multiarray.scalar
+      - *id001
+      - !!binary |
+        AAAAAAAAAAA=
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  - - !!python/object/apply:numpy.core.multiarray.scalar
+      - *id001
+      - !!binary |
+        AAAAAAAAAAA=
+    - !!python/object/apply:numpy.core.multiarray.scalar
+      - *id001
+      - !!binary |
+        AAAAAAAAAAA=
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+  pyb_freq: 500
+  quad_type: 3
+  randomized_gates_and_obstacles: false
+  randomized_inertial_prop: false
+  randomized_init: true
+  reseed_on_reset: true
+  seed: 1337
+  task: stabilization
+use_firmware: true
+verbose: true
