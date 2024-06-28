@@ -27,6 +27,7 @@ def create_race_env(
     action_transformer_path: Path,
     gui: bool = False,
     seed: int = 0,
+    terminate_on_lap: bool = False,
 ) -> DroneRacingWrapper:
     """Create the drone racing environment."""
     # Load configuration and check if firmare should be used.
@@ -45,7 +46,7 @@ def create_race_env(
     firmware_env = make("firmware", env_factory, FIRMWARE_FREQ, CTRL_FREQ)
     return DroneRacingWrapper(
         firmware_env,
-        terminate_on_lap=False,
+        terminate_on_lap=terminate_on_lap,
         observation_parser_path=observation_parser_path,
         rewarder_path=rewarder_path,
         action_transformer_path=action_transformer_path,
@@ -62,6 +63,7 @@ def main(
     log_level: int = logging.INFO,
     seed: int = 0,
     num_timesteps: int = 500_000,
+    terminate_on_lap: bool = False,
 ):
     """Create the environment, check its compatibility with sb3, and run a PPO agent."""
     logging.basicConfig(level=log_level)
@@ -83,6 +85,7 @@ def main(
         action_transformer_path=action_transformer_path,
         gui=gui,
         seed=seed,
+        terminate_on_lap=terminate_on_lap,
     )
     eval_env = create_race_env(
         level_path=level_path,
@@ -91,6 +94,7 @@ def main(
         action_transformer_path=action_transformer_path,
         gui=gui_eval,
         seed=seed,
+        terminate_on_lap=terminate_on_lap,
     )
 
     observation_parser_shortname = env.observation_parser.get_shortname()

@@ -75,7 +75,7 @@ class DroneStateMachine:
 
         return Command.NONE, []
 
-    def policy_control(self, ep_time: float, obs: np.ndarray, info: Dict[str, Any]) -> tuple:
+    def policy_control(self, ep_time: float, obs_parser: np.ndarray, info: Dict[str, Any]) -> tuple:
         """Handle the policy control state.
 
         Args:
@@ -88,18 +88,10 @@ class DroneStateMachine:
         """
         gate_id = info["current_gate_id"] if "current_gate_id" in info.keys() else info["current_target_gate_id"]
         if gate_id != -1:
-            if isinstance(obs, ObservationParser):
-                drone_pos = obs.drone_pos
-                drone_yaw = obs.drone_yaw
-                obs = obs.get_observation()
-            else:
-                drone_pos = obs[:3]
-                drone_yaw = None
+            obs = obs_parser.get_observation()
 
             action, next_predicted_state = self.model.predict(obs, deterministic=True)
-            transformed_action = self.action_transformer.transform(
-                raw_action=action, drone_pos=drone_pos, drone_yaw=drone_yaw
-            )
+            transformed_action = self.action_transformer.transform(raw_action=action, obs_parser=obs_parser)
             firmware_action = self.action_transformer.create_firmware_action(transformed_action, sim_time=ep_time)
             command_type = Command.FULLSTATE
             return command_type, firmware_action

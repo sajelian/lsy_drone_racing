@@ -185,9 +185,7 @@ class DroneRacingWrapper(Wrapper):
 
         # Transform the action using a custom action transformer and then adapt it to the firmware
         raw_action = action
-        action = self.action_transformer.transform(
-            raw_action=action, drone_pos=self.observation_parser.drone_pos, drone_yaw=self.observation_parser.drone_yaw
-        )
+        action = self.action_transformer.transform(raw_action=action, obs_parser=self.observation_parser)
         firmware_action = self.action_transformer.create_firmware_action(action, sim_time=self._sim_time)
         self.env.sendFullStateCmd(*firmware_action)
 
@@ -325,7 +323,9 @@ class DroneRacingObservationWrapper:
 
         return obs, info
 
-    def step(self, *args: Any, **kwargs: dict[str, Any]) -> tuple[np.ndarray, float, bool, dict, np.ndarray]:
+    def step(
+        self, sim_time: float, action: np.array, *args: Any, **kwargs: dict[str, Any]
+    ) -> tuple[np.ndarray, float, bool, dict, np.ndarray]:
         """Take a step in the current environment.
 
         Args:
@@ -339,8 +339,8 @@ class DroneRacingObservationWrapper:
             info: The info dictionary.
             action: The action taken by the agent in the firmware format.
         """
-        obs, reward, done, info, action = self.env.step(*args, **kwargs)
-        self.observation_parser.update(obs, info)
+        obs, reward, done, info, action = self.env.step(sim_time, action)
+        self.observation_parser.update(obs, info, action=kwargs.get("applied_transformed_action", None))
         obs = self.observation_parser.get_observation().astype(np.float32)
 
         reward = self.rewarder.get_custom_reward(self.observation_parser, info)

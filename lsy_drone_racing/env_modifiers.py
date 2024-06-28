@@ -99,15 +99,6 @@ class ObservationParser(ABC):
             action: The previous action.
         """
         self.previous_drone_pos = self.drone_pos if not initial else obs[0:6:2]
-        if initial:
-            self.gate_edge_size = info["gate_dimensions"]["tall"]["edge"]
-            self.reference_position = info["x_reference"][0:6:2]
-            self.previous_action = np.zeros(4)
-            self.ctrl_freq = info["ctrl_freq"]
-            self.dt = 1 / self.ctrl_freq
-            self.speed_estimator.reset()
-        if action is not None:
-            self.previous_action = action
         self.drone_pos = obs[0:6:2]
         self.measured_drone_speed = obs[1:6:2]
         self.drone_rpy = obs[6:9]
@@ -117,6 +108,16 @@ class ObservationParser(ABC):
         self.speed_estimator.update()
         self.drone_speed = self.speed_estimator.speed_estimate
         self.drone_angular_speed = self.speed_estimator.angular_speed_estimate
+
+        if initial:
+            self.gate_edge_size = info["gate_dimensions"]["tall"]["edge"]
+            self.reference_position = info["x_reference"][0:6:2]
+            self.previous_action = np.concatenate([self.drone_pos, [0]])
+            self.ctrl_freq = info["ctrl_freq"]
+            self.dt = 1 / self.ctrl_freq
+            self.speed_estimator.reset()
+        if action is not None:
+            self.previous_action = action
         # norm_sped = np.linalg.norm(self.drone_speed)
         # angular_speed = np.linalg.norm(self.drone_angular_speed)
         # logger.info(f"Speed: {norm_sped}, Angular speed: {angular_speed}")
@@ -190,31 +191,38 @@ class ActionObservationParser(ObservationParser):
         n_gates: int,
         n_obstacles: int,
         n_gates_in_sight: int = 2,
+        action_limits: list = [5] * 3 + [np.pi],
         drone_speed_limits: list = [10] * 3,
         drone_rpy_limits: list = [np.pi] * 3,
         drone_angular_speed_limits: list = [10] * 3,
-        gate_pos_limits: list = [5] * 3,
-        gate_yaw_limits: list = [np.pi],
-        obstacle_pos_limits: list = [5] * 3,
-        action_limits: np.ndarray = [1] * 4,
+        gate_pos_limits: list = [10] * 3,
+        obstacle_pos_limits: list = [10] * 3,
+        speed_noise: float = 0.0,
         **kwargs: Any,
     ):
         """Initialize the Scaramuzza observation parser."""
-        super().__init__(n_gates, n_obstacles)
+        super().__init__(n_gates, n_obstacles, **kwargs)
+        n_corners = 4
         self.n_gates_in_sight = n_gates_in_sight
+        self.speed_noise = speed_noise
+        relative_corners_limits = gate_pos_limits * n_gates_in_sight * n_corners
         obs_limits = (
-            drone_speed_limits
-            + drone_angular_speed_limits
+            action_limits
+            + drone_speed_limits
             + drone_rpy_limits
-            + gate_pos_limits * n_gates_in_sight
-            + gate_yaw_limits * n_gates_in_sight
+            + drone_angular_speed_limits
+            + relative_corners_limits
             + obstacle_pos_limits * n_obstacles
-            + action_limits
             + [n_gates]
         )
         obs_limits_high = np.array(obs_limits)
         obs_limits_low = np.concatenate([-obs_limits_high[:-1], [-1]])
         self.observation_space = Box(obs_limits_low, obs_limits_high, dtype=np.float32)
+        logger.info(
+            f"ActionObservationParser: Action limits: {action_limits}, Drone speed limits: {drone_speed_limits}, \
+            Drone rpy limits: {drone_rpy_limits}, Drone angular speed limits: {drone_angular_speed_limits}, \
+            Gate pos limits: {gate_pos_limits}, Obstacle pos limits: {obstacle_pos_limits}, Speed noise: {speed_noise}"
+        )
 
     def get_shortname(self) -> str:
         """Return shortname to identify learned model after training."""
@@ -222,29 +230,23 @@ class ActionObservationParser(ObservationParser):
 
     def get_observation(self) -> np.ndarray:
         """Return the current observation."""
-        gates_relative_pos = self.get_relative_gates()
-
+        relative_corners = self.get_relative_corners(include_reference_position=True)
         if self.gate_id == -1:
-            gates_in_sight = [self.reference_position - self.drone_pos] * self.n_gates_in_sight
-            gates_yaw_in_sight = [0] * self.n_gates_in_sight
+            relative_corners_in_sight = [relative_corners[:, -1, :]] * self.n_gates_in_sight
         else:
             gates_ids_in_sight = range(self.gate_id, self.gate_id + self.n_gates_in_sight)
             gates_ids_in_sight = [i if i < self.n_gates else -1 for i in gates_ids_in_sight]
-            gates_in_sight = [
-                gates_relative_pos[i] if i != -1 else self.reference_position - self.drone_pos
-                for i in gates_ids_in_sight
-            ]
-            gates_yaw_in_sight = [self.gates_yaw[i] if i != -1 else 0 for i in gates_ids_in_sight]
+            relative_corners_in_sight = [relative_corners[:, i, :] for i in gates_ids_in_sight]
+
         relative_obstacles = self.get_relative_obstacles()
         obs = np.concatenate(
             [
-                self.drone_speed,
-                self.drone_angular_speed,
-                self.drone_rpy,
-                np.array(gates_in_sight).ravel(),
-                np.array(gates_yaw_in_sight).ravel(),
-                relative_obstacles.flatten(),
                 self.previous_action,
+                self.drone_speed + np.random.normal(0, self.speed_noise, 3),
+                self.drone_rpy,
+                self.drone_angular_speed + np.random.normal(0, self.speed_noise, 3),
+                np.array(relative_corners_in_sight).ravel(),
+                relative_obstacles.flatten(),
                 [self.gate_id],
             ]
         )
@@ -638,17 +640,18 @@ class Rewarder:
                 raise ValueError(f"{attr} must be a float.")
 
         self.shortname = shortname
-
-    def __repr__(self) -> str:
-        """Return the string representation of the rewarder."""
-        return (
-            f"Rewarder(collision={self.collision}, out_of_bounds={self.out_of_bounds}, "
-            f"end_reached={self.end_reached}, gate_reached={self.gate_reached}, "
-            f"times_up={self.times_up}, dist_to_gate_mul={self.dist_to_gate_mul}, "
-            f"z_penalty={self.z_penalty}, z_penalty_threshold={self.z_penalty_threshold}, "
-            f"action_smoothness={self.action_smoothness}, body_rate_penalty={self.body_rate_penalty}, "
-            f"shortname={self.shortname})"
+        
+        logger.info(
+            f"Rewarder: Collision: {self.collision}, Out of bounds: {self.out_of_bounds}, \
+            End reached: {self.end_reached}, Gate reached: {self.gate_reached}, \
+            Times up: {self.times_up}, Dist to gate mul: {self.dist_to_gate_mul}, \
+            Z penalty: {self.z_penalty}, Z penalty threshold: {self.z_penalty_threshold}, \
+            Action smoothness: {self.action_smoothness}, Body rate penalty: {self.body_rate_penalty}, \
+            Speed threshold: {self.speed_threshold}, Speed penalty: {self.speed_penalty}, \
+            Angular speed threshold: {self.angular_speed_threshold}, Angular speed penalty: {self.angular_speed_penalty}, \
+            Hovering goal: {self.hovering_goal}, Shortname: {self.shortname}"
         )
+
 
     @classmethod
     def from_yaml(cls, file_path: str) -> Rewarder:  # noqa: ANN102
@@ -740,7 +743,7 @@ class ActionTransformer(ABC):
         pass
 
     @abstractmethod
-    def transform(self, raw_action: np.ndarray, drone_pos: np.array) -> np.ndarray:
+    def transform(self, raw_action: np.ndarray, obs_parser: "ObservationParser") -> np.ndarray:
         """Transform the raw action to the action space."""
         raise NotImplementedError
 
@@ -789,6 +792,38 @@ class ActionTransformer(ABC):
         return (angle + np.pi) % (2 * np.pi) - np.pi
 
 
+class DoubleRelativeActionTransformer(ActionTransformer):
+    """Class to transform the action space to relative actions."""
+
+    def __init__(
+        self,
+        pos_scaling: np.array = 0.01 * np.ones(3),
+        yaw_scaling: float = np.pi / 100.0,
+        yaw_relative: bool = True,
+        **kwargs: Any,
+    ):
+        """Initialize the relative action transformer."""
+        super().__init__()
+        self.pos_scaling = pos_scaling
+        self.yaw_scaling = yaw_scaling
+        self.yaw_relative = yaw_relative
+        logger.info(
+            f"DoubleRelativeActionTransformer: Pos scaling: {self.pos_scaling}, Yaw scaling: {self.yaw_scaling}"
+        )
+
+    def transform(self, raw_action: np.ndarray, obs_parser: "ObservationParser") -> np.ndarray:
+        """Return a reative action based on the previous action."""
+        action_transform = np.zeros(4)
+        previous_action = obs_parser.previous_action
+        action_transform[:3] = previous_action[:3] + raw_action[:3] * self.pos_scaling
+        action_transform[3] = self.clip_mpi_to_pi(previous_action[3] + self.yaw_scaling * raw_action[3])
+        return action_transform
+
+    def get_shortname(self) -> str:
+        """Return shortname to identify learned model after training."""
+        return "2rel"
+
+
 class RelativeActionTransformer(ActionTransformer):
     """Class to transform the action space to relative actions."""
 
@@ -805,36 +840,23 @@ class RelativeActionTransformer(ActionTransformer):
         self.yaw_scaling = yaw_scaling
         self.yaw_relative = yaw_relative
 
-    @classmethod
-    def from_yaml(cls, file_path: str) -> RelativeActionTransformer:  # noqa: ANN102
-        """Load the action transformer from a YAML file.
-
-        Args:
-            file_path: The path to the YAML file.
-
-        Returns:
-            The action transformer.
-        """
-        with open(file_path, "r") as file:
-            data = yaml.safe_load(file)
-        return cls(**data)
-
-    def transform(self, raw_action: np.ndarray, drone_pos: np.array, drone_yaw: float) -> np.ndarray:
+    def transform(self, raw_action: np.ndarray, obs_parser: "ObservationParser") -> np.ndarray:
         """Transform the raw action to the action space.
 
         Args:
             raw_action: The raw action from the model is in the range [-1, 1].
-            drone_pos: The current position of the drone.
-            drone_yaw: The current yaw of the drone.
+            obs_parser: observation parser to get some needed information.
 
         Returns:
             The transformed action to control the drone as a 4-dimensional vector.
         """
+        drone_pos = obs_parser.drone_pos
+        drone_yaw = obs_parser.drone_yaw
         action_transform = np.zeros(4)
         action_transform[:3] = drone_pos + raw_action[:3] * self.pos_scaling
         if self.yaw_relative:
-            action_transform[3] = self.clip_mpi_to_pi( self.yaw_scaling * raw_action[3] + drone_yaw)
-        else: 
+            action_transform[3] = self.clip_mpi_to_pi(self.yaw_scaling * raw_action[3] + drone_yaw)
+        else:
             action_transform[3] = self.yaw_scaling * raw_action[3]
         return action_transform
 
@@ -852,12 +874,12 @@ class AbsoluteActionTransformer(ActionTransformer):
         self.pos_scaling = pos_scaling
         self.yaw_scaling = yaw_scaling
 
-    def transform(self, raw_action: np.ndarray, drone_pos: np.array) -> np.ndarray:
+    def transform(self, raw_action: np.ndarray, obs_parser: "ObservationParser") -> np.ndarray:
         """Transform the raw action to the action space.
 
         Args:
             raw_action: The raw action from the model is in the range [-1, 1].
-            drone_pos: The current position of the drone.
+            obs_parser: not actually needed for  this action transformer.
 
         Returns:
             The transformed action to control the drone.
@@ -889,4 +911,6 @@ def make_action_transformer(
         return RelativeActionTransformer(**data)
     if action_transformer_type == "absolute":
         return AbsoluteActionTransformer(**data)
+    if action_transformer_type == "double_relative":
+        return DoubleRelativeActionTransformer(**data)
     raise ValueError(f"Unknown action transformer type: {action_transformer_type}")
