@@ -1,0 +1,5 @@
+type: "double_relative"
+pos_scaling: [0.1, 0.1, 0.1]
+yaw_scaling: 0.01
+
+shortname: "2rel100"

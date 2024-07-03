@@ -199,12 +199,23 @@ class DroneRacingWrapper(Wrapper):
         # final gate. We set terminated to True if the task is completed and the drone has passed
         # the final gate.
         terminated, truncated = False, False
+
+        drone_crashed = info["collision"][1]
+        passed_last_gate = info["current_gate_id"] == -1
+        task_completed = info["task_completed"]
+
         if info["task_completed"] and info["current_gate_id"] != -1:
+            logger.info("Task completed but last gate not passed.")
+            logger.info(f"Drone crashed: {drone_crashed}")
+            # This corresponds to a crash before the last gate
             truncated = True
         elif self.terminate_on_lap and info["current_gate_id"] == -1:
+            # This corresponds to a successful lap
             info["task_completed"] = True
             terminated = True
         elif done:  # Done, but last gate not passed -> terminate
+            # logger.info("Done")
+            # logger.info(f"Info: {info}")
             terminated = True
 
         # Update the observation parser and get the observation.

@@ -9,10 +9,12 @@ from typing import Any
 import numpy as np
 import yaml
 from gymnasium.spaces import Box
+from transforms3d.euler import euler2mat
 
 from lsy_drone_racing.speed_estimation import make_speed_estimator
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 
 class ObservationParser(ABC):
@@ -102,11 +104,13 @@ class ObservationParser(ABC):
         self.drone_pos = obs[0:6:2]
         self.measured_drone_speed = obs[1:6:2]
         self.drone_rpy = obs[6:9]
+        self.drone_rot_matrix = euler2mat(*self.drone_rpy)
         self.measured_drone_angular_speed = obs[9:12]
 
         # We update the speed estimator
         self.speed_estimator.update()
         self.drone_speed = self.speed_estimator.speed_estimate
+        self.drone_relative_speed = self.drone_rot_matrix.T @ self.drone_speed
         self.drone_angular_speed = self.speed_estimator.angular_speed_estimate
 
         if initial:
@@ -183,6 +187,78 @@ class ObservationParser(ABC):
         return f"{self.__class__.__name__}(n_gates={self.n_gates}, n_obstacles={self.n_obstacles})"
 
 
+class FullRelativeObservationParser(ObservationParser):
+    """Class to parse the observation space of the firmware environment as provided by the Scaramuzza lab."""
+
+    def __init__(
+        self,
+        n_gates: int,
+        n_obstacles: int,
+        n_gates_in_sight: int = 2,
+        action_limits: list = [5] * 3 + [np.pi],
+        drone_speed_limits: list = [10] * 3,
+        drone_rot_matrix_limits: list = [1] * 9,
+        drone_angular_speed_limits: list = [10] * 3,
+        gate_pos_limits: list = [10] * 3,
+        obstacle_pos_limits: list = [10] * 3,
+        speed_noise: float = 0.0,
+        **kwargs: Any,
+    ):
+        """Initialize the Scaramuzza observation parser."""
+        super().__init__(n_gates, n_obstacles, **kwargs)
+        n_corners = 4
+        self.n_gates_in_sight = n_gates_in_sight
+        self.speed_noise = speed_noise
+        relative_corners_limits = gate_pos_limits * n_gates_in_sight * n_corners
+        obs_limits = (
+            action_limits
+            + drone_speed_limits
+            + drone_rot_matrix_limits
+            + drone_angular_speed_limits
+            + relative_corners_limits
+            + obstacle_pos_limits * n_obstacles
+            + [n_gates]
+        )
+        obs_limits_high = np.array(obs_limits)
+        obs_limits_low = np.concatenate([-obs_limits_high[:-1], [-1]])
+        self.observation_space = Box(obs_limits_low, obs_limits_high, dtype=np.float32)
+        logger.info(
+            f"FullRelativeObservationParser: Action limits: {action_limits}, Drone speed limits: {drone_speed_limits}, \
+            Drone rot matrix limits: {drone_rot_matrix_limits}, Drone angular speed limits: {drone_angular_speed_limits}, \
+            Gate pos limits: {gate_pos_limits}, Obstacle pos limits: {obstacle_pos_limits}, Speed noise: {speed_noise}"
+        )
+
+    def get_shortname(self) -> str:
+        """Return shortname to identify learned model after training."""
+        return "fullRel"
+
+    def get_observation(self) -> np.ndarray:
+        """Return the current observation."""
+        relative_corners = self.get_relative_corners(include_reference_position=True)
+        if self.gate_id == -1:
+            gates_ids_in_sight = [-1] * self.n_gates_in_sight
+        else:
+            gates_ids_in_sight = range(self.gate_id, self.gate_id + self.n_gates_in_sight)
+            gates_ids_in_sight = [i if i < self.n_gates else -1 for i in gates_ids_in_sight]
+
+        relative_corners_in_sight = [relative_corners[:, i, :] for i in gates_ids_in_sight]
+
+        relative_obstacles = self.get_relative_obstacles()
+        obs = np.concatenate(
+            [
+                self.previous_action,
+                self.drone_relative_speed + np.random.normal(0, self.speed_noise, 3),
+                self.drone_rot_matrix.ravel(),
+                self.drone_angular_speed + np.random.normal(0, self.speed_noise, 3),
+                np.array(relative_corners_in_sight).ravel(),
+                relative_obstacles.flatten(),
+                [self.gate_id],
+            ]
+        )
+        # logger.debug(f"Gates id in sight: {gates_ids_in_sight}")
+        return obs.astype(np.float32)
+
+
 class ActionObservationParser(ObservationParser):
     """Class to parse the observation space of the firmware environment as provided by the Scaramuzza lab."""
 
@@ -232,11 +308,12 @@ class ActionObservationParser(ObservationParser):
         """Return the current observation."""
         relative_corners = self.get_relative_corners(include_reference_position=True)
         if self.gate_id == -1:
-            relative_corners_in_sight = [relative_corners[:, -1, :]] * self.n_gates_in_sight
+            gates_ids_in_sight = [-1] * self.n_gates_in_sight
         else:
             gates_ids_in_sight = range(self.gate_id, self.gate_id + self.n_gates_in_sight)
             gates_ids_in_sight = [i if i < self.n_gates else -1 for i in gates_ids_in_sight]
-            relative_corners_in_sight = [relative_corners[:, i, :] for i in gates_ids_in_sight]
+
+        relative_corners_in_sight = [relative_corners[:, i, :] for i in gates_ids_in_sight]
 
         relative_obstacles = self.get_relative_obstacles()
         obs = np.concatenate(
@@ -250,6 +327,7 @@ class ActionObservationParser(ObservationParser):
                 [self.gate_id],
             ]
         )
+        # logger.debug(f"Gates id in sight: {gates_ids_in_sight}")
         return obs.astype(np.float32)
 
 
@@ -565,6 +643,8 @@ def make_observation_parser(
         The observation parser.
     """
     type = data["type"]
+    if type == "full_relative":
+        return FullRelativeObservationParser(n_gates, n_obstacles, **data)
     if type == "action":
         return ActionObservationParser(n_gates, n_obstacles, **data)
     if type == "minimal":
@@ -640,7 +720,7 @@ class Rewarder:
                 raise ValueError(f"{attr} must be a float.")
 
         self.shortname = shortname
-        
+
         logger.info(
             f"Rewarder: Collision: {self.collision}, Out of bounds: {self.out_of_bounds}, \
             End reached: {self.end_reached}, Gate reached: {self.gate_reached}, \
@@ -651,7 +731,6 @@ class Rewarder:
             Angular speed threshold: {self.angular_speed_threshold}, Angular speed penalty: {self.angular_speed_penalty}, \
             Hovering goal: {self.hovering_goal}, Shortname: {self.shortname}"
         )
-
 
     @classmethod
     def from_yaml(cls, file_path: str) -> Rewarder:  # noqa: ANN102
@@ -692,13 +771,14 @@ class Rewarder:
         if info["collision"][1]:
             return self.collision
 
-        if terminated and not info["task_completed"]:
+        if info.get("TimeLimit.truncated", False):
             return self.times_up
 
         if obs_parser.out_of_bounds():
             return self.out_of_bounds
 
         if info["task_completed"]:
+            logger.info("End reached. Hooray!")
             return self.end_reached
 
         if self.hovering_goal is not None:
@@ -800,6 +880,7 @@ class DoubleRelativeActionTransformer(ActionTransformer):
         pos_scaling: np.array = 0.01 * np.ones(3),
         yaw_scaling: float = np.pi / 100.0,
         yaw_relative: bool = True,
+        shortname: str = "2rel",
         **kwargs: Any,
     ):
         """Initialize the relative action transformer."""
@@ -811,6 +892,8 @@ class DoubleRelativeActionTransformer(ActionTransformer):
             f"DoubleRelativeActionTransformer: Pos scaling: {self.pos_scaling}, Yaw scaling: {self.yaw_scaling}"
         )
 
+        self.shortname = shortname
+
     def transform(self, raw_action: np.ndarray, obs_parser: "ObservationParser") -> np.ndarray:
         """Return a reative action based on the previous action."""
         action_transform = np.zeros(4)
@@ -821,7 +904,7 @@ class DoubleRelativeActionTransformer(ActionTransformer):
 
     def get_shortname(self) -> str:
         """Return shortname to identify learned model after training."""
-        return "2rel"
+        return self.shortname
 
 
 class RelativeActionTransformer(ActionTransformer):
