@@ -1,8 +1,0 @@
-action_transformer: config/action_transformer/medium_relative_yaw.yaml
-gui: false
-level: config/level/level_train2.yaml
-model_name: models/ppo_l2_obs_rel_corners_rew_default_act_rel_num_timesteps_10000000_time_06-24-20-39/best_model/best_model
-num_timesteps: 10000000
-observation_parser: config/observation_parser/relative_corners_real.yaml
-rewarder: config/rewarder/omega_june24_rewarder.yaml
-seed: 0

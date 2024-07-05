@@ -1,8 +1,0 @@
-action_transformer: config/action_transformer/medium.yaml
-gui: false
-level: config/level/train1.yaml
-model_name: models/ppo_t1_obs_sca_rew_acmpc_act_rel_num_timesteps_1000000_time_06-15-11-52/best_model/best_model
-num_timesteps: 1000000
-observation_parser: config/observation_parser/scaramuzza.yaml
-rewarder: config/rewarder/acmpc_rewarder.yaml
-seed: 0

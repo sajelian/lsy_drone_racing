@@ -6,7 +6,7 @@ from typing import Any  # Python 3.10 type hints
 
 import numpy as np
 from safe_control_gym.controllers.firmware.firmware_wrapper import logging
-from stable_baselines3 import PPO
+from stable_baselines3 import PPO, SAC
 
 from controllers.ppo.ppo_deploy import DroneStateMachine
 from lsy_drone_racing.command import Command
@@ -64,6 +64,7 @@ class Controller(BaseController):
 
         self.model_name = model_name if model_name else "models/working_model"
         self.model = PPO.load(self.model_name)
+        # self.model = SAC.load(self.model_name)
         self.action_transformer = (
             ActionTransformer.from_yaml(action_transformer) if action_transformer else RelativeActionTransformer()
         )

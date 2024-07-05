@@ -1,0 +1,9 @@
+levels: [
+  "config/level/level_line0.yaml",
+  "config/level/level_train0.yaml"
+]
+reward_thresholds: [
+  13.0,
+  16.0,
+]
+shortname: test

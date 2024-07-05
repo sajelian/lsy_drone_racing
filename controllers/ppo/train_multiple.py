@@ -55,64 +55,38 @@ def create_race_env(
 
 
 class IncreaseDifficultyCallback(BaseCallback):
+    """Callback to increase the difficulty of the environment when the mean reward is above a threshold."""
+
     def __init__(
         self,
-        model: PPO,
-        level_list: list[str],
-        observation_parser_path: Path,
-        rewarder_path: Path,
-        action_transformer_path: Path,
+        threshold: float = 13.0,
         verbose: int = 0,
-        increase_difficulty_reward: float = -1000,
-        gui: bool = False,
-        seed: int = 0,
-        terminate_on_lap: bool = False,
         **kwargs: Any,
     ):
+        """Initialize the callback.
+
+        Args:
+            threshold: The threshold above which the mean reward should be to increase the difficulty.
+            verbose: The verbosity level.
+            **kwargs: Additional arguments.
+        """
         super().__init__(verbose=verbose)
-        self.model = model
-        self.level_list = level_list
-        self.observation_parser_path = observation_parser_path
-        self.rewarder_path = rewarder_path
-        self.action_transformer_path = action_transformer_path
-        self.gui = gui
-        self.seed = seed
-        self.terminate_on_lap = terminate_on_lap
-        self.increase_difficulty_reward = increase_difficulty_reward
-        self.current_level = 0
+        self.threshold = threshold
 
     def _on_step(self) -> bool:
         last_mean_reward = self.parent.last_mean_reward
         logger.info(f"Last mean reward: {self.parent.last_mean_reward}")
-        if last_mean_reward > self.increase_difficulty_reward and self.current_level < len(self.level_list) - 1:
-            logger.info("Increasing difficulty since mean reward is above threshold.")
-            self.current_level += 1
-            self.model.set_env(
-                create_race_env(
-                    level_path=self.level_list[self.current_level],
-                    observation_parser_path=self.observation_parser_path,
-                    rewarder_path=self.rewarder_path,
-                    action_transformer_path=self.action_transformer_path,
-                    gui=self.gui,
-                    seed=self.seed,
-                    terminate_on_lap=self.terminate_on_lap,
-                )
-            )
-            self.parent.env = create_race_env(
-                level_path=self.level_list[self.current_level],
-                observation_parser_path=self.observation_parser_path,
-                rewarder_path=self.rewarder_path,
-                action_transformer_path=self.action_transformer_path,
-                gui=self.gui,
-                seed=self.seed,
-                terminate_on_lap=self.terminate_on_lap,
-            )
-        return True
+        if last_mean_reward > self.threshold:
+            logger.info("============================================================")
+            logger.info(f"Increasing difficulty since mean reward is above threshold {self.threshold}.")
+            logger.info("============================================================")
+            return False
+        else:
+            return True
 
 
 def main(
-    level: str = "config/level/blabla.yaml",
-    level_list: str = None,
+    levels: str,
     observation_parser: str = "config/observation_parser/default.yaml",
     rewarder: str = "config/rewarder/default.yaml",
     action_transformer: str = "config/action_transformer/default.yaml",
@@ -121,6 +95,7 @@ def main(
     log_level: int = logging.INFO,
     seed: int = 0,
     num_timesteps: int = 500_000,
+    eval_freq: int = 100_000,
     model_type: str = "ppo",
     terminate_on_lap: bool = False,
 ):
@@ -129,29 +104,24 @@ def main(
 
     project_path = Path(__file__).resolve().parents[2]
 
-    if level_list:
-        level_list_path = project_path / level_list
-        with open(level_list_path, "r") as file:
-            level_list_config = munchify(yaml.safe_load(file))
-        levels_list = [project_path / level_list_item for level_list_item in level_list_config.levels]
-        logger.info(f"Training on levels: {levels_list}")
-    else:
-        levels_list = []
+    level_list_path = project_path / levels
+    with open(level_list_path, "r") as file:
+        levels_config = munchify(yaml.safe_load(file))
 
-    level_path = project_path / levels_list[0] if level_list else project_path / level
+    level_list = [project_path / level_list_item for level_list_item in levels_config.levels]
+    reward_thresholds = levels_config.reward_thresholds
+    levels_shortname = levels_config.shortname
+    logger.info("============================================================")
+    logger.info(f"({levels_shortname}) Training on levels: {level_list} with reward thresholds: {reward_thresholds}")
+    logger.info("============================================================")
+
+    level_path = project_path / level_list[0]
     observation_parser_path = project_path / observation_parser
     rewarder_path = project_path / rewarder
     action_transformer_path = project_path / action_transformer
     allowed_model_types = {"ppo": PPO, "sac": SAC}
     assert model_type in allowed_model_types.keys(), f"Model type must be one of {allowed_model_types}"
     model_class = allowed_model_types[model_type]
-
-    # Set level name and path
-    if level_list:
-        level_short_name = level_list
-    else:
-        level_name = level.split("/")[-1].split(".")[0]
-        level_short_name = level_name[0] + level_name[-1]
 
     env = create_race_env(
         level_path=level_path,
@@ -168,17 +138,9 @@ def main(
     action_transformer_shortname = env.action_transformer.get_shortname()
     date_now = datetime.datetime.now().strftime("%m-%d-%H-%M")
 
-    logger.info(
-        f"Training {level_short_name} level "
-        + f"with {observation_parser_shortname}"
-        + f" observation parser, {rewarder_shortname} rewarder,"
-        + f" {action_transformer_shortname} action transformer. "
-        + f"Time: {date_now}"
-    )
-
     train_name = f"{model_type}_" + "_".join(
         [
-            level_short_name,
+            levels_shortname,
             "obs",
             observation_parser_shortname,
             "rew",
@@ -199,7 +161,7 @@ def main(
     with open(f"models/{train_name}/params.yaml", "w") as file:
         yaml.dump(
             {
-                "level": level,
+                "level": levels,
                 "observation_parser": observation_parser,
                 "rewarder": rewarder,
                 "action_transformer": action_transformer,
@@ -213,7 +175,6 @@ def main(
         )
 
     # Sanity check to ensure the environment conforms to the sb3 API
-    # check_env(env)
     model = model_class(
         "MlpPolicy",
         env,
@@ -231,33 +192,72 @@ def main(
         seed=seed,
         terminate_on_lap=terminate_on_lap,
     )
-
     increase_difficulty = IncreaseDifficultyCallback(
         model=model,
-        level_list=levels_list,
-        observation_parser_path=observation_parser_path,
-        rewarder_path=rewarder_path,
-        action_transformer_path=action_transformer_path,
-        gui=gui,
-        seed=seed,
-        terminate_on_lap=terminate_on_lap,
+        threshold=reward_thresholds[0],
     )
     eval_callback = EvalCallback(
         eval_env,
-        # callback_after_eval=increase_difficulty,
+        callback_after_eval=increase_difficulty,
         best_model_save_path=best_model_save_path,
         log_path="./logs/",
-        eval_freq=100_000,
+        eval_freq=eval_freq,
         deterministic=True,
     )
 
     try:
-        model.learn(
-            total_timesteps=num_timesteps,
-            progress_bar=True,
-            tb_log_name=train_name,
-            callback=eval_callback,
-        )
+        for level_id in range(len(level_list)):
+            model.learn(
+                total_timesteps=num_timesteps,
+                progress_bar=True,
+                tb_log_name=train_name,
+                callback=eval_callback,
+            )
+
+            if level_id < len(level_list) - 1:
+                level_path = project_path / level_list[level_id + 1]
+                reward_threshold = reward_thresholds[level_id + 1]
+
+                model.set_env(
+                    create_race_env(
+                        level_path=level_path,
+                        observation_parser_path=observation_parser_path,
+                        rewarder_path=rewarder_path,
+                        action_transformer_path=action_transformer_path,
+                        gui=gui,
+                        seed=seed,
+                        terminate_on_lap=terminate_on_lap,
+                    )
+                )
+
+
+                eval_env = create_race_env(
+                    level_path=level_path,
+                    observation_parser_path=observation_parser_path,
+                    rewarder_path=rewarder_path,
+                    action_transformer_path=action_transformer_path,
+                    gui=gui_eval,
+                    seed=seed,
+                    terminate_on_lap=terminate_on_lap,
+                )
+                increase_difficulty = IncreaseDifficultyCallback(
+                    model=model,
+                    threshold=reward_threshold,
+                )
+                eval_callback = EvalCallback(
+                    eval_env,
+                    callback_after_eval=increase_difficulty,
+                    best_model_save_path=best_model_save_path,
+                    log_path="./logs/",
+                    eval_freq=eval_freq,
+                    deterministic=True,
+                )
+
+            else:
+                logger.info("============================================================")
+                logger.info("Finished training on all levels.")
+                logger.info("============================================================")
+
     except KeyboardInterrupt:
         logger.info("Training interrupted. Saving model.")
 
