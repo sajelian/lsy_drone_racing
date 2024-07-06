@@ -31,8 +31,8 @@ class DroneStateMachine:
         model: Any,
         action_transformer: ActionTransformer,
         only_policy: bool = False,
-        takeoff_duration: float = 1.0,
-        takeoff_height: float = 0.2,
+        takeoff_duration: float = 2.0,
+        takeoff_height: float = 0.4,
         landing_duration: float = 10.0,
         go_to_stabilization_duration: float = 3.0,
     ):
