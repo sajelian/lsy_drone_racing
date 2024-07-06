@@ -35,22 +35,9 @@ quadrotor_config:
     stabilization_goal_tolerance: 0.15
 
   # Nominal (pre-randomization) initial state
-  init_state:
-    [
-      [1.0, 0.0, 1.0, 0.0, 0.05, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+  init_state: [
+      [1.0, 0.0, 1.0, 0.0, 0.4, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0],
   ]
-    #init_x: 1.0
-    #init_x_dot: 0
-    #init_y: 1.0
-    #init_y_dot: 0
-    #init_z: 0.05
-    #init_z_dot: 0
-    #init_phi: 0
-    #init_theta: 0
-    #init_psi: 0
-    #init_p: 0
-    #init_q: 0
-    #init_r: 0
 
   # Nominal (pre-randomization) positions of gates and obstacles
   gates:
@@ -73,16 +60,16 @@ quadrotor_config:
   init_state_randomization_info:
     init_x: 
       distrib: "uniform"
-      low: -0.1
-      high: 0.1
+      low: -0.5
+      high: 0.5
     init_y: 
       distrib: "uniform"
-      low: -0.1
-      high: 0.1
+      low: -0.5
+      high: 0.5
     init_z:
       distrib: "uniform"
-      low: 0.0
-      high: 0.02
+      low: -0.3
+      high: 0.3
     init_phi:
       distrib: "uniform"
       low: -0.1
@@ -121,12 +108,12 @@ quadrotor_config:
   gates_and_obstacles_randomization_info:
     gates:
       distrib: "uniform"
-      low: -0.15
-      high: 0.15
+      low: -0.2
+      high: 0.2
     obstacles:
       distrib: "uniform"
-      low: -0.15
-      high: 0.15
+      low: -0.2
+      high: 0.2
 
   # Constraints
   constraints:
