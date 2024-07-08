@@ -81,11 +81,6 @@ class DroneRacingWrapper(Wrapper):
         self.env.unwrapped = None  # Add an (empty) unwrapped attribute
         self.env.render_mode = None
 
-        # Action space for the model. The action space is later transformed and finally converted to
-        # the firmware action.
-        action_limits = np.ones(4)
-        self.action_space = Box(-action_limits, action_limits, dtype=np.float32)
-
         # Observation space:
         if observation_parser_path:
             try:
@@ -125,6 +120,10 @@ class DroneRacingWrapper(Wrapper):
                 logger.error(f"Failed to load action transformer from YAML: {e}")
                 logger.error("Using action transformer with relative actions.")
                 self.action_transformer = RelativeActionTransformer()
+
+        # Action space for the model. The action space is later transformed and finally converted to
+        # the firmware action.
+        self.action_space = self.action_transformer.get_action_space()
 
         self.pyb_client_id: int = env.env.PYB_CLIENT
         # Config and helper flags
@@ -206,7 +205,6 @@ class DroneRacingWrapper(Wrapper):
 
         if info["task_completed"] and info["current_gate_id"] != -1:
             logger.info("Task completed but last gate not passed.")
-            logger.info(f"Drone crashed: {drone_crashed}")
             # This corresponds to a crash before the last gate
             truncated = True
         elif self.terminate_on_lap and info["current_gate_id"] == -1:
@@ -217,6 +215,9 @@ class DroneRacingWrapper(Wrapper):
             # logger.info("Done")
             # logger.info(f"Info: {info}")
             terminated = True
+
+        if info.get("TimeLimit.truncated", False):
+            truncated = True
 
         # Update the observation parser and get the observation.
         self.observation_parser.update(obs, info, action=action)
@@ -353,6 +354,7 @@ class DroneRacingObservationWrapper:
         obs, reward, done, info, action = self.env.step(sim_time, action)
         self.observation_parser.update(obs, info, action=kwargs.get("applied_transformed_action", None))
         obs = self.observation_parser.get_observation().astype(np.float32)
+        # logger.info(f"Observation: {obs}")
 
         reward = self.rewarder.get_custom_reward(self.observation_parser, info)
 
