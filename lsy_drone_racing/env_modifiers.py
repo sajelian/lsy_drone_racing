@@ -187,6 +187,50 @@ class ObservationParser(ABC):
         return f"{self.__class__.__name__}(n_gates={self.n_gates}, n_obstacles={self.n_obstacles})"
 
 
+class NormalizedObservationParser(ObservationParser):
+    """Class to normalize the observation space of a provided observation parser."""
+
+    def __init__(self, observation_parser: ObservationParser):
+        """Initialize the normalized observation parser."""
+        self.observation_parser = observation_parser
+        self.low = self.observation_parser.observation_space.low
+        self.high = self.observation_parser.observation_space.high
+        self.observation_space = Box(-1.0, 1.0, shape=observation_parser.observation_space.shape)
+        logger.info(f"NormalizedObservationParser: Observation space: {self.observation_space}")
+
+    def update(
+        self,
+        obs: np.ndarray,
+        info: dict[str, Any],
+        initial: bool = False,
+        action: np.ndarray = None,
+    ):
+        """Update the observation parser with the new observation and info dict.
+
+        Args:
+            obs: The new observation.
+            info: The new info dict.
+            initial: True if this is the initial observation.
+            action: The previous action.
+        """
+        self.observation_parser.update(obs, info, initial, action)
+
+    def __getattr__(self, name: str) -> Any:
+        """Return the attribute from the observation parser."""
+        return getattr(self.observation_parser, name)
+
+    def get_observation(self) -> np.ndarray:
+        """Return the current observation, normalized."""
+        obs = self.observation_parser.get_observation()
+        normalized_obs = 2 * (obs - self.low) / (self.high - self.low) - 1
+        return normalized_obs
+
+    def get_shortname(self) -> str:
+        """Return shortname to identify learned model after training."""
+        return f"{self.observation_parser.get_shortname()}Norm"
+        
+
+
 class FullRelativeObservationParser(ObservationParser):
     """Class to parse the observation space of the firmware environment as provided by the Scaramuzza lab."""
 
@@ -643,21 +687,24 @@ def make_observation_parser(
         The observation parser.
     """
     type = data["type"]
+    normalized = data.get("normalized", False)
     if type == "full_relative":
-        return FullRelativeObservationParser(n_gates, n_obstacles, **data)
-    if type == "action":
-        return ActionObservationParser(n_gates, n_obstacles, **data)
-    if type == "minimal":
-        return MinimalObservationParser(n_gates, n_obstacles, **data)
-    if type == "relative_position":
-        return RelativePositionObservationParser(n_gates, n_obstacles, **data)
-    if type == "scaramuzza":
-        return ScaramuzzaObservationParser(n_gates, n_obstacles, **data)
-    if type == "relative_corners":
-        return RelativeCornersObservationParser(n_gates, n_obstacles, **data)
-    if type == "classic":
-        return ClassicObservationParser(n_gates, n_obstacles, **data)
-    raise ValueError(f"Unknown observation parser type: {type}")
+        obs_parser = FullRelativeObservationParser(n_gates, n_obstacles, **data)
+    elif type == "action":
+        obs_parser = ActionObservationParser(n_gates, n_obstacles, **data)
+    elif type == "minimal":
+        obs_parser = MinimalObservationParser(n_gates, n_obstacles, **data)
+    elif type == "relative_position":
+        obs_parser = RelativePositionObservationParser(n_gates, n_obstacles, **data)
+    elif type == "scaramuzza":
+        obs_parser = ScaramuzzaObservationParser(n_gates, n_obstacles, **data)
+    elif type == "relative_corners":
+        obs_parser = RelativeCornersObservationParser(n_gates, n_obstacles, **data)
+    elif type == "classic":
+        obs_parser = ClassicObservationParser(n_gates, n_obstacles, **data)
+    else:
+        raise ValueError(f"Unknown observation parser type: {type}")
+    return NormalizedObservationParser(obs_parser) if normalized else obs_parser
 
 
 class Rewarder:
@@ -827,7 +874,11 @@ class ActionTransformer(ABC):
         """Transform the raw action to the action space."""
         raise NotImplementedError
 
-    def create_firmware_action(self, action: np.ndarray, sim_time: float) -> np.ndarray:
+    def create_firmware_action(
+        self,
+        action: np.ndarray,
+        sim_time: float,
+    ) -> np.ndarray:
         """Create the firmware action, from the transformed action.
 
         Args:
@@ -838,8 +889,12 @@ class ActionTransformer(ABC):
             The firmware action. The firmware action is a 14-dimensional vector.
         """
         zeros3 = np.zeros(3)
-        action = [action[:3], zeros3, zeros3, action[3], zeros3, sim_time]
+        action = [action[:3], zeros3, zeros3, action[3] if len(action) == 4 else 0.0, zeros3, sim_time]
         return action
+
+    def get_action_space(self) -> Box:
+        """Return the action space."""
+        return Box(-1.0, 1.0, shape=(4,), dtype=np.float32)
 
     @classmethod
     def from_yaml(cls, file_path: str) -> ActionTransformer:  # noqa: ANN102
@@ -871,6 +926,34 @@ class ActionTransformer(ABC):
         """
         return (angle + np.pi) % (2 * np.pi) - np.pi
 
+class NoYawActionTransformer(ActionTransformer):
+    """Class to transform the action space to relative actions."""
+
+    def __init__(
+        self,
+        pos_scaling: np.array = 0.025 * np.ones(3),
+        shortname: str = "2rel",
+        **kwargs: Any,
+    ):
+        """Initialize the relative action transformer."""
+        super().__init__()
+        self.pos_scaling = pos_scaling
+        logger.info(
+            f"NoYawActionTransformer: Pos scaling: {self.pos_scaling}"
+        )
+
+        self.shortname = shortname
+
+    def transform(self, raw_action: np.ndarray, obs_parser: "ObservationParser") -> np.ndarray:
+        """Return a reative action based on the previous action."""
+        action_transform = np.zeros(3)
+        previous_action = obs_parser.previous_action
+        action_transform = previous_action[:3] + raw_action[:3] * self.pos_scaling
+        return action_transform
+
+    def get_shortname(self) -> str:
+        """Return shortname to identify learned model after training."""
+        return self.shortname
 
 class DoubleRelativeActionTransformer(ActionTransformer):
     """Class to transform the action space to relative actions."""
@@ -915,6 +998,7 @@ class RelativeActionTransformer(ActionTransformer):
         pos_scaling: np.array = 0.5 * np.ones(3),
         yaw_scaling: float = np.pi,
         yaw_relative: bool = False,
+        shortname: str = "rel",
         **kwargs: Any,
     ):
         """Initialize the relative action transformer."""
@@ -922,6 +1006,8 @@ class RelativeActionTransformer(ActionTransformer):
         self.pos_scaling = pos_scaling
         self.yaw_scaling = yaw_scaling
         self.yaw_relative = yaw_relative
+
+        self.shortname = shortname
 
     def transform(self, raw_action: np.ndarray, obs_parser: "ObservationParser") -> np.ndarray:
         """Transform the raw action to the action space.
@@ -945,7 +1031,7 @@ class RelativeActionTransformer(ActionTransformer):
 
     def get_shortname(self) -> str:
         """Return shortname to identify learned model after training."""
-        return "rel"
+        return self.shortname
 
 
 class AbsoluteActionTransformer(ActionTransformer):
@@ -997,3 +1083,6 @@ def make_action_transformer(
     if action_transformer_type == "double_relative":
         return DoubleRelativeActionTransformer(**data)
     raise ValueError(f"Unknown action transformer type: {action_transformer_type}")
+
+
+

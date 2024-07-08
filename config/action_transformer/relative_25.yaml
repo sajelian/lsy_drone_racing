@@ -1,0 +1,6 @@
+type: "relative"
+pos_scaling: [0.025, 0.025, 0.025]
+yaw_scaling: 0.01
+yaw_relative: True
+
+shortname: "rel25"

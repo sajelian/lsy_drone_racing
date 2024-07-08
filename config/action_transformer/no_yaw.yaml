@@ -1,0 +1,4 @@
+type: "double_relative"
+pos_scaling: [0.025, 0.025, 0.025]
+
+shortname: "noyaw"
