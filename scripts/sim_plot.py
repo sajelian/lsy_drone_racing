@@ -31,41 +31,95 @@ from lsy_drone_racing.wrapper import DroneRacingObservationWrapper
 
 logger = logging.getLogger(__name__)
 
-N_RUNS = 1
+N_RUNS = 10
+N_AGENTS = 4
+
 """
 TODO:
 -comments, docstrings
 -proper stucture maybe extra file and class etc
--read gate positions from config yaml
--run 100 runs and adjust opacity
+-multiple violins, mutiple bars.
 """
 
-def plot_violins(fig, ax, lap_times):
 
+def plot_violins(fig, ax, lap_times):
+    """Plot the lap times as violin plots."""
     ax.violinplot(lap_times, showmedians=False, showextrema=False)
-    medianprops = dict(linewidth=1.5, color='black')
-    ax.boxplot(lap_times, showfliers=False, whis = (0, 100), capwidths=0.0, medianprops=medianprops)
+    medianprops = dict(linewidth=1.5, color="black")
+    ax.boxplot(lap_times, showfliers=False, whis=(0, 100), capwidths=0.0, medianprops=medianprops)
     x = np.random.normal(1, 0.01, size=len(lap_times))
     ax.scatter(x, lap_times, alpha=0.2, color="blue")
     ax.set_ylabel("Laptime [s]")
     ax.set_xlabel(f"PPO-Agent \n (n={N_RUNS})")
-    
+
 
 def plot_2d_trajectories(fig, ax, trajectories, collisions):
     """Plot the trajectories of drone runs."""
+    plotted_collission = False
+    plotted_success = False
+    alpha = 0.2
     for trajectory_id, trajectory in enumerate(trajectories):
         trajectory = np.array(trajectory)
-        ax.plot(
-            trajectory[:, 0], trajectory[:, 1], color="firebrick" if collisions[trajectory_id] else "navy", alpha=0.1
-        )
+        if not plotted_collission and collisions[trajectory_id]:
+            plotted_collission = True
+            ax.plot(
+                trajectory[:, 0],
+                trajectory[:, 1],
+                color="firebrick",
+                label="collision",
+                alpha=alpha,
+                linewidth=2,
+            )
+        elif not plotted_success and not collisions[trajectory_id]:
+            plotted_success = True
+            ax.plot(
+                trajectory[:, 0],
+                trajectory[:, 1],
+                color="navy",
+                label="success",
+                alpha=alpha,
+                linewidth=2,
+            )
+        else:
+            ax.plot(
+                trajectory[:, 0],
+                trajectory[:, 1],
+                color="firebrick" if collisions[trajectory_id] else "navy",
+                alpha=alpha,
+                linewidth=2,
+            )
+        if collisions[trajectory_id]:
+            ax.scatter(trajectory[-1, 0], trajectory[-1, 1], color="black", marker="x", s=50, alpha=0.5)
+
+    ax.legend()
 
 
-def plot_gates(fig, ax, gates):
+def plot_gate_reached_percentage(fig, ax, gate_reached):
+    """Plot the gate reached percentage of drone runs."""
+    total_gate_sum = 0
+    for gate_amount in gate_reached:
+        total_gate_sum += gate_amount
+
+    for i, gate_i_reached_amount in enumerate(gate_reached):
+        ax.barh(i, gate_i_reached_amount / total_gate_sum * 100, color="navy")
+
+    # ax.set_y_label
+    ax.set_ylabel("Gate Passed")
+    ax.set_xlabel(f"Percentage of Total Runs [%] \n (n={N_RUNS})")
+
+
+def plot_parcour(fig, ax, gates, obstacles):
     """Plot the gate configurations for a drone racing course."""
     edge_size: float = 0.525
 
     for i, gate in enumerate(gates):
-        ax.text(gate[0], gate[1], str(i))
+        ax.text(
+            gate[0] + edge_size / 2 * np.cos(gate[-2]),
+            gate[1] + edge_size / 2 * np.sin(gate[-2]),
+            str(i),
+            fontsize=15,
+            fontweight="bold",
+        )
         ax.plot(
             [
                 gate[0] - edge_size / 2 * np.cos(gate[-2]),
@@ -78,22 +132,23 @@ def plot_gates(fig, ax, gates):
             linewidth=5,
             color="grey",
         )
+    for obstacle in obstacles:
+        ax.scatter(obstacle[0], obstacle[1], color="blue", marker="o", s=100)
 
     ax.set_aspect("equal")
-    ax.set_xlabel("x [m]")
+    ax.set_xlabel(f"x [m] \n (n={N_RUNS})")
     ax.set_ylabel("y [m]")
-    ax.set_xlim([-3, 3])
-    ax.set_ylim([-3, 3])
-
+    ax.set_xlim([-2, 2])
+    ax.set_ylim([-2, 2])
 
 
 def simulate(
-    config: str = "config/level/level3.yaml", #config/level/level3_straight.yaml",
+    config: str = "config/level/level3.yaml",  # config/level/level3_straight.yaml",
     controller: str = "controllers/ppo/ppo.py",
-    controller_params: str = "models/ppo_lt_obs_act_rew_beta_act_2rel_num_timesteps_100000_time_06-28-14-11/params.yaml",
+    controller_params: str = "models/ppo_l3_obs_act_rew_beta_act_2rel25_num_timesteps_5000000_time_07-01-22-47/params.yaml",
     n_runs: int = N_RUNS,
     gui: bool = False,
-    terminate_on_lap: bool = False,
+    terminate_on_lap: bool = True,
     log_level: str = "INFO",
 ) -> list[float]:
     """Evaluate the drone controller over multiple episodes.
@@ -162,19 +217,12 @@ def simulate(
         "violations": 0,
         "gates_passed": 0,
     }
+
+    # Data lists for plotting
     ep_times = []
-
-    # Plotting
-    fig, ax = plt.subplots()
-    fig1, ax1 = plt.subplots()
-
-    # TODO get gate pos and yaw from level config file
-    gates = config.quadrotor_config["gates"]
-    
-    plot_gates(fig, ax, gates)
-
     trajectories = []
     collisions = []
+    gates_reached = [0, 0, 0, 0, 0]
 
     # Run the episodes.
     for _ in range(n_runs):
@@ -251,7 +299,11 @@ def simulate(
         # save run data
         collisions.append(collision)
         trajectories.append(trajectory)
-
+        # increment reached gate counter
+        if info["current_gate_id"] == -1:
+            gates_reached[4] += 1
+        else:
+            gates_reached[info["current_gate_id"]] += 1
 
         # Learn after the episode if the controller supports it
         ctrl.episode_learn()  # Update the controller internal state and models.
@@ -262,19 +314,35 @@ def simulate(
         stats["collisions"] = 0
         stats["collision_objects"] = set()
         stats["violations"] = 0
-        ep_times.append(curr_time if info["current_gate_id"] == -1 else None)
+        if info["current_gate_id"] == -1:
+            ep_times.append(curr_time)
+
+        print(_)
 
     # Close the environment
     env.close()
 
+    # Plotting
+    fig, ax = plt.subplots()
+    fig1, ax1 = plt.subplots()
+    fig2, ax2 = plt.subplots()
+
+    obstacles = config.quadrotor_config["obstacles"]
+    gates = config.quadrotor_config["gates"]
+
+    plot_parcour(fig, ax, gates, obstacles)
     plot_2d_trajectories(fig, ax, trajectories, collisions)
-    plot_violins(fig1, ax1, ep_times)
-    
+    if len(ep_times) > 0:
+        plot_violins(fig1, ax1, ep_times)
+
+    plot_gate_reached_percentage(fig2, ax2, gates_reached)
+
     plt.tight_layout()
-    
-    fig.savefig("trajectories.pdf") #TODO adapt this to save to different files
-    fig1.savefig("laptimes.pdf")
-    
+
+    fig.savefig("trajectories.pdf", bbox_inches="tight")
+    fig1.savefig("laptimes.pdf", bbox_inches="tight")
+    fig2.savefig("gate_reached.pdf", bbox_inches="tight")
+
     plt.show()
 
     return ep_times
