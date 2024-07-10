@@ -9,6 +9,7 @@ Look for instructions in `README.md` and `edit_this.py`.
 
 from __future__ import annotations
 
+import csv
 import logging
 import time
 from functools import partial
@@ -17,8 +18,11 @@ from pathlib import Path
 import fire
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 import pybullet as p
+import seaborn as sns
 import yaml
+from matplotlib.colors import ListedColormap
 from munch import Munch, munchify
 from safe_control_gym.utils.registration import make
 from safe_control_gym.utils.utils import sync
@@ -29,10 +33,16 @@ from lsy_drone_racing.env_modifiers import ActionTransformer, ObservationParser,
 from lsy_drone_racing.utils import load_controller
 from lsy_drone_racing.wrapper import DroneRacingObservationWrapper
 
+#TODO change fonts to Latex style
+
 logger = logging.getLogger(__name__)
 
-N_RUNS = 10
+N_RUNS = 100
 N_AGENTS = 4
+
+OBSTACLE = None
+GATES = None
+
 
 """
 TODO:
@@ -42,15 +52,29 @@ TODO:
 """
 
 
-def plot_violins(fig, ax, lap_times):
+def plot_violins(ax, agents_lap_times, model_names):
     """Plot the lap times as violin plots."""
-    ax.violinplot(lap_times, showmedians=False, showextrema=False)
+    colors_lst = ["royalblue", "darkorange", "gold", "darkorchid"]
     medianprops = dict(linewidth=1.5, color="black")
-    ax.boxplot(lap_times, showfliers=False, whis=(0, 100), capwidths=0.0, medianprops=medianprops)
-    x = np.random.normal(1, 0.01, size=len(lap_times))
-    ax.scatter(x, lap_times, alpha=0.2, color="blue")
-    ax.set_ylabel("Laptime [s]")
-    ax.set_xlabel(f"PPO-Agent \n (n={N_RUNS})")
+    for i, lap_times in enumerate(agents_lap_times):
+        if len(lap_times) > 0:
+            vp_plot = ax.violinplot(lap_times, vert=True, positions=[i + 1], showmedians=False, showextrema=False)
+            for vp in vp_plot["bodies"]:
+                vp.set_facecolor(colors_lst[i])
+            ax.boxplot(
+                lap_times,
+                positions=[i + 1],
+                vert=True,
+                showfliers=False,
+                whis=(0, 100),
+                capwidths=0.0,
+                medianprops=medianprops,
+            )
+            x = np.random.normal(i + 1, 0.01, size=len(lap_times))
+            ax.scatter(x, lap_times, alpha=0.4, color=colors_lst[i])
+            ax.set_ylabel("Laptime [s]")
+
+    ax.set_xticks(np.arange(1, len(model_names) + 1), labels=model_names)
 
 
 def plot_2d_trajectories(fig, ax, trajectories, collisions):
@@ -94,18 +118,47 @@ def plot_2d_trajectories(fig, ax, trajectories, collisions):
     ax.legend()
 
 
-def plot_gate_reached_percentage(fig, ax, gate_reached):
+def plot_gate_reached_percentage(ax, agents_gate_reached, model_names):
     """Plot the gate reached percentage of drone runs."""
-    total_gate_sum = 0
-    for gate_amount in gate_reached:
-        total_gate_sum += gate_amount
+    flatui = sns.color_palette("deep")
+    my_cmap = ListedColormap(sns.color_palette(flatui).as_hex())
 
-    for i, gate_i_reached_amount in enumerate(gate_reached):
-        ax.barh(i, gate_i_reached_amount / total_gate_sum * 100, color="navy")
+    num_agents = len(agents_gate_reached)
+    num_gates = len(agents_gate_reached[0])
 
-    # ax.set_y_label
+    # Define the width of each bar
+    bar_width = 0.8 / num_agents
+
+    # Define colors for each agent (this can be expanded or modified as needed)
+    colors_lst = plt.cm.get_cmap(my_cmap, num_agents).colors
+
+    # Loop through each agent
+    for agent_index, gate_reached in enumerate(agents_gate_reached):
+        total_gate_sum = sum(gate_reached)
+
+        # Calculate positions for bars for this agent
+        positions = np.arange(num_gates) + agent_index * (bar_width)
+
+        # Plot each gate's percentage reached
+        percentages = [gate_i_reached_amount / total_gate_sum * 100 for gate_i_reached_amount in gate_reached]
+        ax.barh(
+            positions,
+            percentages,
+            bar_width - 0.05,
+            label=f"Agent {model_names[agent_index]}",
+            color=colors_lst[agent_index],
+        )
+
+    # Set y-ticks to be in the center of the grouped bars
+    ax.set_yticks(np.arange(num_gates) + (num_agents - 1) * bar_width / 2)
+    ax.set_yticklabels([f"Gate {i}" for i in range(num_gates)])
+
+    # Set labels and title
     ax.set_ylabel("Gate Passed")
     ax.set_xlabel(f"Percentage of Total Runs [%] \n (n={N_RUNS})")
+
+    # Add a legend
+    ax.legend()
 
 
 def plot_parcour(fig, ax, gates, obstacles):
@@ -143,9 +196,9 @@ def plot_parcour(fig, ax, gates, obstacles):
 
 
 def simulate(
-    config: str = "config/level/level3.yaml",  # config/level/level3_straight.yaml",
+    model_name: str = "model_name",
+    config: str = "config/level/level3.yaml",
     controller: str = "controllers/ppo/ppo.py",
-    controller_params: str = "models/ppo_l3_obs_act_rew_beta_act_2rel25_num_timesteps_5000000_time_07-01-22-47/params.yaml",
     n_runs: int = N_RUNS,
     gui: bool = False,
     terminate_on_lap: bool = True,
@@ -154,6 +207,7 @@ def simulate(
     """Evaluate the drone controller over multiple episodes.
 
     Args:
+        model_name: The name of the learned model file.
         config: The path to the configuration file.
         controller: The path to the controller module.
         controller_params: The path to the controller parameters.
@@ -165,6 +219,7 @@ def simulate(
     Returns:
         A list of episode times.
     """
+    controller_params = f"models/{model_name}/params.yaml"
     # Load configuration and check if firmare should be used.
     path = Path(config)
     assert path.exists(), f"Configuration file not found: {path}"
@@ -222,7 +277,7 @@ def simulate(
     ep_times = []
     trajectories = []
     collisions = []
-    gates_reached = [0, 0, 0, 0, 0]
+    gate_reached = [0, 0, 0, 0, 0]
 
     # Run the episodes.
     for _ in range(n_runs):
@@ -301,9 +356,9 @@ def simulate(
         trajectories.append(trajectory)
         # increment reached gate counter
         if info["current_gate_id"] == -1:
-            gates_reached[4] += 1
+            gate_reached[4] += 1
         else:
-            gates_reached[info["current_gate_id"]] += 1
+            gate_reached[info["current_gate_id"]] += 1
 
         # Learn after the episode if the controller supports it
         ctrl.episode_learn()  # Update the controller internal state and models.
@@ -323,29 +378,26 @@ def simulate(
     env.close()
 
     # Plotting
-    fig, ax = plt.subplots()
-    fig1, ax1 = plt.subplots()
-    fig2, ax2 = plt.subplots()
+    # fig, ax = plt.subplots()
+    # fig1, ax1 = plt.subplots()
+    # fig2, ax2 = plt.subplots()
 
-    obstacles = config.quadrotor_config["obstacles"]
-    gates = config.quadrotor_config["gates"]
+    # TODO add this to trajectories plot
+    OBSTACLES = config.quadrotor_config["obstacles"]
+    GATES = config.quadrotor_config["gates"]
 
-    plot_parcour(fig, ax, gates, obstacles)
-    plot_2d_trajectories(fig, ax, trajectories, collisions)
-    if len(ep_times) > 0:
-        plot_violins(fig1, ax1, ep_times)
+    # plot_parcour(fig, ax, gates, obstacles)
+    # plot_2d_trajectories(fig, ax, trajectories, collisions)
+    # if len(ep_times) > 0:
+    #     plot_violins(fig1, ax1, ep_times)
 
-    plot_gate_reached_percentage(fig2, ax2, gates_reached)
+    # plot_gate_reached_percentage(fig2, ax2, gates_reached)
 
-    plt.tight_layout()
+    # fig.savefig("trajectories.pdf", bbox_inches="tight")
+    # fig1.savefig("laptimes.pdf", bbox_inches="tight")
+    # fig2.savefig("gate_reached.pdf", bbox_inches="tight")
 
-    fig.savefig("trajectories.pdf", bbox_inches="tight")
-    fig1.savefig("laptimes.pdf", bbox_inches="tight")
-    fig2.savefig("gate_reached.pdf", bbox_inches="tight")
-
-    plt.show()
-
-    return ep_times
+    return ep_times, gate_reached, trajectories
 
 
 def log_episode_stats(stats: dict, info: dict, config: Munch, curr_time: float, lap_finished: bool):
@@ -375,4 +427,103 @@ def log_episode_stats(stats: dict, info: dict, config: Munch, curr_time: float, 
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    fire.Fire(simulate)
+
+    READ = True
+    RUN = False
+
+    # models to iterate over
+    models = [
+        "ppo_l4_obs_actNorm_rew_beta_act_2rel25_num_timesteps_2000000_time_07-05-14-32",
+        "ppo_l4_obs_actNorm_rew_beta_act_2rel_num_timesteps_5000000_time_07-06-00-03",
+        "ppo_l4_obs_actNorm_rew_beta_act_2rel100_num_timesteps_5000000_time_07-06-23-40",
+        "ppo_l3_obs_act_rew_beta_act_2rel25_num_timesteps_5000000_time_07-01-22-47",
+    ]
+    
+    # model names
+    model_names = ["2Rel25 ActNorm", "2Rel50 ActNorm", "2Rel100 ActNorm", "2Rel25 NoNorm"]
+
+    # Lists for plotting
+    agents_laptimes = []
+    agents_gate_reached = []
+    agents_trajectories = []
+
+    # plotting
+    laptimes_fig, laptimes_ax = plt.subplots()
+    gate_reached_fig, gate_reached_ax = plt.subplots()
+
+    # TODO Plot seperate trajectory fig for each model
+    #trajectories_figs = []
+    #trajectories_axs = []
+
+    #for i in range(N_AGENTS):
+    #    fig, ax = plt.subplots()
+    #    trajectories_figs.append(fig)
+    #    trajectories_axs.append(ax)
+
+
+
+    if RUN:
+        # for i, model in enumerate(models):
+        for i in range(N_AGENTS):
+            print(f"Model Iteration: {i}")
+
+            laptimes, gate_reached, trajectories = simulate(models[i])
+
+            agents_laptimes.append(laptimes)
+            agents_gate_reached.append(gate_reached)
+            agents_trajectories.append(trajectories)
+
+        # safe to csv
+        for i, laptimes in enumerate(agents_laptimes):
+            np.savetxt(f"agent{i}_laptimes.csv", laptimes, delimiter=",")
+
+        for i, gate_reached in enumerate(agents_gate_reached):
+            np.savetxt(f"agent{i}_gate_reached.csv", gate_reached, delimiter=",")
+
+        for i, trajectories in enumerate(agents_trajectories):
+            np.savetxt(f"agent{i}_trajectories.csv", trajectories, delimiter=",")
+
+    if READ:
+        # read laptime data from csv file
+        for i in range(N_AGENTS):
+            with open(f"agent{i}_laptimes.csv", "r") as file:
+                data = csv.reader(file, delimiter=",")
+
+                # Convert the CSV data to a list of floats
+                laptimes = []
+                for row in data:
+                    laptimes.extend([float(time) for time in row])
+
+                # Append the list of floats to the agents_laptimes list
+                agents_laptimes.append(laptimes)
+
+        for i in range(N_AGENTS):
+            with open(f"agent{i}_gate_reached.csv", "r") as file:
+                data = csv.reader(file, delimiter=",")
+
+                # Convert the CSV data to a list of floats
+                gate_reached = []
+                for row in data:
+                    gate_reached.extend([float(time) for time in row])
+
+                # Append the list of floats to the agents_laptimes list
+                agents_gate_reached.append(gate_reached)
+
+    # call plotting functions
+    plot_violins(laptimes_ax, agents_laptimes, model_names)
+    plot_gate_reached_percentage(gate_reached_ax, agents_gate_reached, model_names)
+    #TODO plotting trajectories
+
+
+    # safe figs
+    laptimes_fig.autofmt_xdate()
+    gate_reached_fig.autofmt_xdate()
+    laptimes_fig.savefig("laptimes.pdf", bbox_inches="tight")
+    gate_reached_fig.savefig("gate_reached.pdf", bbox_inches="tight")
+    
+    #for i, fig in enumerate(trajectories_figs):
+    #    fig.savefig(f"agent{i}_trajectory.pdf", bbox_inches="tight")
+
+    # show plot
+    plt.tight_layout()
+    plt.show()
