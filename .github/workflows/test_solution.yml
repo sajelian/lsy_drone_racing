@@ -44,6 +44,8 @@ jobs:
         shell: bash -el {0}
       - run: pip install .
         shell: bash -el {0}
+      - run: pip install rich
+        shell: bash -el {0}
       - name: Run simulation tests
         run: python scripts/kaggle.py
         shell: bash -el {0}
