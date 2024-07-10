@@ -14,6 +14,7 @@ jobs:
     env: # Or as an environment variable
       KAGGLE_USERNAME: ${{ secrets.KaggleUsername }}
       KAGGLE_KEY: ${{ secrets.KaggleKey }}
+      PYTHONPATH: ${{ github.workspace }}/safe-control-gym # Set PYTHONPATH
 
     steps:
       - uses: actions/checkout@v4
