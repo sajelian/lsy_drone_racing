@@ -35,7 +35,7 @@ def simulate(
     config: str = "config/level/level3.yaml",
     controller: str = "controllers/ppo/ppo.py",
     controller_params: str = "models/ppo_l4_obs_actNorm_rew_beta_act_2rel100_num_timesteps_5000000_time_07-06-23-40/params.yaml",
-    n_runs: int = 10,
+    n_runs: int = 5,
     gui: bool = True,
     terminate_on_lap: bool = True,
     log_level: str = "INFO",
