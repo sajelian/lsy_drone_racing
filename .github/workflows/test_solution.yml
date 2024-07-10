@@ -30,7 +30,7 @@ jobs:
       #     pip install wheel==0.38.0
       - name: Install safe-control-gym
         run: |
-          git clone -b beta-iros-competition https://github.com/utiasDSL/safe-control-gym.git
+          git clone -b lsy_drone_racing https://github.com/danielsanjosepro/safe-control-gym.git
           cd safe-control-gym
           pip install . --no-deps 
           cd ..
@@ -43,6 +43,8 @@ jobs:
           ./wrapper/build_linux.sh
         shell: bash -el {0}
       - run: pip install .
+        shell: bash -el {0}
+      - run: pip install rich
         shell: bash -el {0}
       - name: Run simulation tests
         run: python scripts/kaggle.py
