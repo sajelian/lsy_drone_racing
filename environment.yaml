@@ -191,7 +191,6 @@ dependencies:
 - qt-main=5.15.8=h112747c_20
 - readline=8.2=h8228510_1
 - requests=2.31.0=pyhd8ed1ab_0
-- rich=12.5.1
 - scipy=1.10.1=py38hf6e8229_1
 - scotch=7.0.4=h23d43cc_1
 - setuptools=69.2.0=pyhd8ed1ab_0
