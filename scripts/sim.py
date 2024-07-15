@@ -32,12 +32,12 @@ logger = logging.getLogger(__name__)
 
 
 def simulate(
-    config: str = "config/level/level0.yaml",
+    config: str = "config/level/level3.yaml",
     controller: str = "controllers/ppo/ppo.py",
-    controller_params: str = "models/working_model/params.yaml",
-    n_runs: int = 1,
+    controller_params: str = "models/ppo_l4_obs_actNorm_rew_beta_act_2rel100_num_timesteps_5000000_time_07-06-23-40/params.yaml",
+    n_runs: int = 5,
     gui: bool = True,
-    terminate_on_lap: bool = False,
+    terminate_on_lap: bool = True,
     log_level: str = "INFO",
 ) -> list[float]:
     """Evaluate the drone controller over multiple episodes.

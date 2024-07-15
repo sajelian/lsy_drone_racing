@@ -197,6 +197,7 @@ dependencies:
 - simde=0.8.0=h00ab1b0_0
 - sip=6.7.12=py38h17151c0_0
 - six=1.16.0=pyh6c4a22f_0
+- stable-baselines3=2.3.2
 - swig=4.2.1=hc9a1274_0
 - sympy=1.12=pypyh9d50eac_103
 - tbb=2021.11.0=h00ab1b0_1
@@ -211,6 +212,7 @@ dependencies:
 - torchvision=0.17.2=py38_cu118
 - tornado=6.4=py38h01eb140_0
 - tqdm=4.66.2=pyhd8ed1ab_0
+- transforms3d=0.4.2
 - typing_extensions=4.10.0=pyha770c72_0
 - unicodedata2=15.1.0=py38h01eb140_0
 - unixodbc=2.3.12=h661eb56_0
