@@ -1,4 +1,7 @@
-"""Classes and utilities for generating gate configurations."""
+"""Classes and utilities for generating gate configurations.
+
+Remark: This is part is not complete. Since no results were reached with this approoach, the idea was abandoned.
+"""
 
 from dataclasses import dataclass
 from pathlib import Path
@@ -45,7 +48,7 @@ class Level:
         self.gates = gates
         self.obstacles = obstacles
 
-    def plot(self, ax=None, label: str = "") -> None:
+    def plot(self, ax=None, label: str = "") -> None:  # noqa: ANN001
         """Plot the level."""
         import matplotlib.pyplot as plt
 
@@ -94,18 +97,8 @@ class Level:
         initial_yaw = 0.0
         initial_position = [initial_x, initial_y, initial_z]
 
-        
         gates = []
-        for i, (gate_position, gate_yaw) in enumerate(zip(self.gates.gates
-            gates.append(
-                {
-                    "position": gate_position.tolist(),
-                    "yaw": gate_yaw,
-                    "gate_id": i + 1,
-                }
-            )
-
-        for i, (gate_position, gate_yaw) in enumerate(zip(gate_positions, gate_yaws)):
+        for i, (gate_position, gate_yaw) in enumerate(zip(self.gates.gate_positions, self.gates.gate_yaws)):
             gates.append(
                 {
                     "position": gate_position.tolist(),
@@ -122,7 +115,6 @@ class Level:
 
         with open(project_root / output_file, "w") as file:
             yaml.dump(template, file)
-                
 
     @classmethod
     def from_yaml(cls, file_path: Path) -> "Level":  # noqa: ANN102
@@ -305,7 +297,7 @@ class LevelGenerator:
         with open(project_root / output_file, "w") as file:
             yaml.dump(template, file)
 
-    def generate_gate_state(self, position: np.ndarray = np.zeros(3), yaw: float = 0.0, gate_id: int = 0):
+    def generate_gate_state(self, position: np.ndarray = np.zeros(3), yaw: float = 0.0, gate_id: int = 0) -> List:
         """Generate the state of a gate."""
         # TODO: Explain the state vector
         # x, y, z, r, p, y, type (0: `tall` obstacle, 1: `low` obstacle)
@@ -319,7 +311,7 @@ class LevelGenerator:
             0 if position[2] > 0.75 else 1,
         ]
 
-    def generate_obstacle_state(self, position: np.ndarray = np.zeros(3)):
+    def generate_obstacle_state(self, position: np.ndarray = np.zeros(3)) -> List:
         """Generate the state of an obstacle."""
         # obstacles:
         # [  # x, y, z, r, p, y
@@ -334,7 +326,7 @@ class LevelGenerator:
             0.0,
         ]
 
-    def generate_full_state(self, position: np.ndarray = np.zeros(3), yaw: float = 0.0, gate_id: int = 0):
+    def generate_full_state(self, position: np.ndarray = np.zeros(3), yaw: float = 0.0, gate_id: int = 0) -> List:
         """Generate the full state of the drone racing course."""
         return [
             position[0],
@@ -360,8 +352,7 @@ def interpolate_levels(level1: Level, level2: Level, interpolation_factor: float
     for gate1, gate2 in zip(level1.gates, level2.gates):
         new_gate = Gate(
             position=(
-                interpolation_factor * np.array(gate1.position)
-                + (1 - interpolation_factor) * np.array(gate2.position)
+                interpolation_factor * np.array(gate1.position) + (1 - interpolation_factor) * np.array(gate2.position)
             ).tolist(),
             yaw=interpolation_factor * gate1.yaw + (1 - interpolation_factor) * gate2.yaw,
             gate_id=gate1.gate_id,
@@ -396,6 +387,7 @@ def move_obstacle_outside_of_gates(obstacle: Obstacle, gates: List[Gate], gate_e
             obstacle.position[:2] = obstacle_position
 
     return obstacle
+
 
 def move_gate_outside_of_gates(gate: Gate, gates: List[Gate], gate_edge_size: float = 0.525) -> Gate:
     """Move the gate outside of the gates."""

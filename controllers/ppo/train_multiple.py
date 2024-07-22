@@ -1,4 +1,7 @@
-"""Example training script using the stable-baselines3 library."""
+"""Training script for the drone racing environment with curriculum learning.
+
+Remarks: this script was not used in the final submission. It did not deliver the expected results and was abandoned.
+"""
 
 from __future__ import annotations
 

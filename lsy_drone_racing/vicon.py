@@ -1,3 +1,4 @@
+"""Vicon interface for the pose estimation data for the drone and any other tracked objects."""
 from __future__ import annotations
 
 import time

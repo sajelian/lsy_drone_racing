@@ -2,16 +2,19 @@
 
 from __future__ import annotations
 
-from typing import Any  # Python 3.10 type hints
+from typing import TYPE_CHECKING, Any  # Python 3.10 type hints
 
 import numpy as np
 from safe_control_gym.controllers.firmware.firmware_wrapper import logging
-from stable_baselines3 import PPO, SAC
+from stable_baselines3 import PPO
 
 from controllers.ppo.ppo_deploy import DroneStateMachine
-from lsy_drone_racing.command import Command
 from lsy_drone_racing.controller import BaseController
-from lsy_drone_racing.env_modifiers import ActionTransformer, ObservationParser, RelativeActionTransformer
+from lsy_drone_racing.env_modifiers.action_transformer import ActionTransformer
+
+if TYPE_CHECKING:
+    from lsy_drone_racing.command import Command
+    from lsy_drone_racing.observation.observation_parser import ObservationParser
 
 logger = logging.getLogger(__name__)
 
@@ -62,12 +65,15 @@ class Controller(BaseController):
         self.reset()
         self.episode_reset()
 
-        self.model_name = model_name if model_name else "models/working_model"
+        self.model_name = (
+            model_name
+            if model_name
+            else "models/ppo_l4_obs_gyro1Norm_rew_br50_act_2rel150_num_timesteps_30000000_time_07-21-16-06/params.yaml"
+        )
         self.model = PPO.load(self.model_name)
         # self.model = SAC.load(self.model_name)
-        self.action_transformer = (
-            ActionTransformer.from_yaml(action_transformer) if action_transformer else RelativeActionTransformer()
-        )
+
+        self.action_transformer = ActionTransformer.from_yaml(file_path=action_transformer)
 
         self._goal = np.array(
             [
@@ -76,7 +82,7 @@ class Controller(BaseController):
                 initial_info["x_reference"][4],
             ]
         )
-        self.state_machine = DroneStateMachine(self._goal, self.model, self.action_transformer) 
+        self.state_machine = DroneStateMachine(self._goal, self.model, self.action_transformer)
 
     def compute_control(
         self,

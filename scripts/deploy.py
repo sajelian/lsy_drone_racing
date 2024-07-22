@@ -3,7 +3,7 @@
 
 Usage:
 
-python deploy.py <path/to/controller.py> <path/to/config.yaml>
+python deploy.py <path/to/controller.py> <path/to/config.yaml> <path/to/controller_params.yaml>
 
 """
 
@@ -13,7 +13,6 @@ import logging
 import pickle
 import time
 from dataclasses import asdict
-from functools import partial
 from pathlib import Path
 
 import fire
@@ -39,7 +38,6 @@ from lsy_drone_racing.env_modifiers import ActionTransformer, ObservationParser,
 from lsy_drone_racing.import_utils import get_ros_package_path, pycrazyswarm
 from lsy_drone_racing.utils import check_gate_pass, load_controller
 from lsy_drone_racing.vicon import Vicon
-from lsy_drone_racing.wrapper import DroneRacingObservationWrapper
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -90,7 +88,7 @@ def create_init_info(
 def main(
     config: str = "config/train0_standard.yaml",
     controller: str = "controllers/ppo/ppo.py",
-    controller_params: str = "models/working_model/params.yaml",
+    controller_params: str = "models/ppo_l4_obs_gyro1Norm_rew_br50_act_2rel150_num_timesteps_30000000_time_07-21-16-06/params.yaml",
 ):
     """Deployment script to run the controller on the real drone."""
     start_time = time.time()
@@ -145,9 +143,10 @@ def main(
         assert path.exists(), f"Controller parameters file not found: {path}, and needed for PPO."
         with open(path, "r") as file:
             controller_args = yaml.safe_load(file)
-            # TODO: dont hardcode the observation parser
+            n_gates = len(gate_poses)
+            n_obstacles = len(obstacle_poses)
             extra_env_args["observation_parser"] = ObservationParser.from_yaml(
-                n_gates=4, n_obstacles=4, file_path=controller_args["observation_parser"]
+                n_gates=n_gates, n_obstacles=n_obstacles, file_path=controller_args["observation_parser"]
             )
             observation_parser = extra_env_args["observation_parser"]
             extra_env_args["action_transformer"] = ActionTransformer.from_yaml(controller_args["action_transformer"])

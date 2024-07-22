@@ -6,14 +6,13 @@ import datetime
 import logging
 from functools import partial
 from pathlib import Path
-from typing import Any
 
 import fire
 import yaml
 from munch import munchify
 from safe_control_gym.utils.registration import make
 from stable_baselines3 import PPO, SAC
-from stable_baselines3.common.callbacks import BaseCallback, EvalCallback
+from stable_baselines3.common.callbacks import EvalCallback
 
 from lsy_drone_racing.constants import FIRMWARE_FREQ
 from lsy_drone_racing.wrapper import DroneRacingWrapper
@@ -54,68 +53,11 @@ def create_race_env(
     )
 
 
-class IncreaseDifficultyCallback(BaseCallback):
-    def __init__(
-        self,
-        model: PPO,
-        level_list: list[str],
-        observation_parser_path: Path,
-        rewarder_path: Path,
-        action_transformer_path: Path,
-        verbose: int = 0,
-        increase_difficulty_reward: float = -1000,
-        gui: bool = False,
-        seed: int = 0,
-        terminate_on_lap: bool = False,
-        **kwargs: Any,
-    ):
-        super().__init__(verbose=verbose)
-        self.model = model
-        self.level_list = level_list
-        self.observation_parser_path = observation_parser_path
-        self.rewarder_path = rewarder_path
-        self.action_transformer_path = action_transformer_path
-        self.gui = gui
-        self.seed = seed
-        self.terminate_on_lap = terminate_on_lap
-        self.increase_difficulty_reward = increase_difficulty_reward
-        self.current_level = 0
-
-    def _on_step(self) -> bool:
-        last_mean_reward = self.parent.last_mean_reward
-        logger.info(f"Last mean reward: {self.parent.last_mean_reward}")
-        if last_mean_reward > self.increase_difficulty_reward and self.current_level < len(self.level_list) - 1:
-            logger.info("Increasing difficulty since mean reward is above threshold.")
-            self.current_level += 1
-            self.model.set_env(
-                create_race_env(
-                    level_path=self.level_list[self.current_level],
-                    observation_parser_path=self.observation_parser_path,
-                    rewarder_path=self.rewarder_path,
-                    action_transformer_path=self.action_transformer_path,
-                    gui=self.gui,
-                    seed=self.seed,
-                    terminate_on_lap=self.terminate_on_lap,
-                )
-            )
-            self.parent.env = create_race_env(
-                level_path=self.level_list[self.current_level],
-                observation_parser_path=self.observation_parser_path,
-                rewarder_path=self.rewarder_path,
-                action_transformer_path=self.action_transformer_path,
-                gui=self.gui,
-                seed=self.seed,
-                terminate_on_lap=self.terminate_on_lap,
-            )
-        return True
-
-
 def main(
-    level: str = "config/level/blabla.yaml",
-    level_list: str = None,
-    observation_parser: str = "config/observation_parser/default.yaml",
-    rewarder: str = "config/rewarder/default.yaml",
-    action_transformer: str = "config/action_transformer/default.yaml",
+    level: str = "config/level/level_train4.yaml",
+    observation_parser: str = "config/observation_parser/action_normalized.yaml",
+    rewarder: str = "config/rewarder/br10.yaml",
+    action_transformer: str = "config/action_transformer/double_relative_150.yaml",
     gui: bool = False,
     gui_eval: bool = False,
     log_level: int = logging.INFO,
@@ -129,16 +71,7 @@ def main(
 
     project_path = Path(__file__).resolve().parents[2]
 
-    if level_list:
-        level_list_path = project_path / level_list
-        with open(level_list_path, "r") as file:
-            level_list_config = munchify(yaml.safe_load(file))
-        levels_list = [project_path / level_list_item for level_list_item in level_list_config.levels]
-        logger.info(f"Training on levels: {levels_list}")
-    else:
-        levels_list = []
-
-    level_path = project_path / levels_list[0] if level_list else project_path / level
+    level_path = project_path / level
     observation_parser_path = project_path / observation_parser
     rewarder_path = project_path / rewarder
     action_transformer_path = project_path / action_transformer
@@ -147,11 +80,8 @@ def main(
     model_class = allowed_model_types[model_type]
 
     # Set level name and path
-    if level_list:
-        level_short_name = level_list
-    else:
-        level_name = level.split("/")[-1].split(".")[0]
-        level_short_name = level_name[0] + level_name[-1]
+    level_name = level.split("/")[-1].split(".")[0]
+    level_short_name = level_name[0] + level_name[-1]
 
     env = create_race_env(
         level_path=level_path,
@@ -232,16 +162,6 @@ def main(
         terminate_on_lap=terminate_on_lap,
     )
 
-    increase_difficulty = IncreaseDifficultyCallback(
-        model=model,
-        level_list=levels_list,
-        observation_parser_path=observation_parser_path,
-        rewarder_path=rewarder_path,
-        action_transformer_path=action_transformer_path,
-        gui=gui,
-        seed=seed,
-        terminate_on_lap=terminate_on_lap,
-    )
     eval_callback = EvalCallback(
         eval_env,
         # callback_after_eval=increase_difficulty,

@@ -1,14 +1,14 @@
 """Script to test the observation parser module."""
 import numpy as np
 
-from lsy_drone_racing.env_modifiers import ObservationParser, make_observation_parser
+from lsy_drone_racing.env_modifiers.observation_parser import make_observation_parser
 
 
 def test_observation_parser():
     """Test the observation parser."""
     n_gates = 3
     n_obstacles = 2
-    obs_parser = make_observation_parser(n_gates, n_obstacles, observation_parser_type="classic")
+    obs_parser = make_observation_parser(n_gates, n_obstacles, type="relative_corners")
 
     # Check the uninitialized state
     assert obs_parser.uninitialized()

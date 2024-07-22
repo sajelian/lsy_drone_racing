@@ -1,4 +1,7 @@
-"""Helper functions and classes for state estimation."""
+"""Helper functions and classes for state estimation.
+
+Remark: This module is not used in the final implementation of the project.
+"""
 
 import logging
 from abc import ABC, abstractmethod

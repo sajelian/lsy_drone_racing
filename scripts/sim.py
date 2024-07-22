@@ -20,11 +20,12 @@ import pybullet as p
 import yaml
 from munch import Munch, munchify
 from safe_control_gym.utils.registration import make
-from safe_control_gym.utils.utils import sync
 
 from lsy_drone_racing.command import Command, apply_sim_command
 from lsy_drone_racing.constants import FIRMWARE_FREQ
-from lsy_drone_racing.env_modifiers import ActionTransformer, ObservationParser, Rewarder
+from lsy_drone_racing.env_modifiers.action_transformer import ActionTransformer
+from lsy_drone_racing.env_modifiers.observation_parser import ObservationParser
+from lsy_drone_racing.env_modifiers.rewarder import Rewarder
 from lsy_drone_racing.utils import load_controller
 from lsy_drone_racing.wrapper import DroneRacingObservationWrapper
 
@@ -82,9 +83,13 @@ def simulate(
         assert path.exists(), f"Controller parameters file not found: {path}, and needed for PPO."
         with open(path, "r") as file:
             controller_args = yaml.safe_load(file)
-            # TODO: dont hardcode the observation parser 
+            # TODO: dont hardcode the observation parser
+            n_gates = len(config.quadrotor_config.gates)
+            n_obstacles = len(config.quadrotor_config.obstacles)
             extra_env_args["observation_parser"] = ObservationParser.from_yaml(
-                n_gates=4, n_obstacles=4, file_path=controller_args["observation_parser"]
+                n_gates=n_gates,
+                n_obstacles=n_obstacles,
+                file_path=controller_args["observation_parser"],
             )
             extra_env_args["action_transformer"] = ActionTransformer.from_yaml(controller_args["action_transformer"])
             extra_env_args["rewarder"] = Rewarder.from_yaml(controller_args["rewarder"])
@@ -127,9 +132,8 @@ def simulate(
             physicsClientId=env.pyb_client_id,
         )
 
-        
         obs, info = env.reset()
-        #logger.info(info)
+        # logger.info(info)
         info["ctrl_timestep"] = CTRL_DT
         info["ctrl_freq"] = CTRL_FREQ
         lap_finished = False
@@ -137,9 +141,6 @@ def simulate(
         ctrl = ctrl_class(obs, info, verbose=config.verbose, **controller_args)
         gui_timer = p.addUserDebugText("", textPosition=[0, 0, 1], physicsClientId=env.pyb_client_id)
         i = 0
-
-        top_speed = 0
-        top_angular_speed = 0
 
         while not done:
             curr_time = i * CTRL_DT
@@ -194,13 +195,12 @@ def simulate(
                 [stats["top_angular_speed"], np.linalg.norm(env.observation_parser.drone_angular_speed)]
             )
 
-
             # Synchronize the GUI.
             if clock_time:
                 wall_clock_duration = time.time() - ep_start
                 if wall_clock_duration > curr_time:
                     time.sleep((wall_clock_duration - curr_time) / 1000.0)
-                
+
             i += 1
             # Break early after passing the last gate (=> gate -1) or task completion
             if terminate_on_lap and info["current_gate_id"] == -1:

@@ -5,7 +5,8 @@ import numpy as np
 from safe_control_gym.controllers.firmware.firmware_wrapper import logging
 
 from lsy_drone_racing.command import Command
-from lsy_drone_racing.env_modifiers import ActionTransformer, ObservationParser
+from lsy_drone_racing.env_modifiers.action_transformer import ActionTransformer
+from lsy_drone_racing.env_modifiers.observation_parser import ObservationParser
 
 logger = logging.getLogger(__name__)
 
@@ -114,8 +115,10 @@ class DroneStateMachine:
             obs = obs_parser.get_observation()
 
             action, next_predicted_state = self.model.predict(obs, deterministic=True)
+
             transformed_action = self.action_transformer.transform(raw_action=action, obs_parser=obs_parser)
             firmware_action = self.action_transformer.create_firmware_action(transformed_action, sim_time=ep_time)
+
             command_type = Command.FULLSTATE
             return command_type, firmware_action
 

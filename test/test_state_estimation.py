@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from lsy_drone_racing.state_estimation import LowPassSpeedEstimator, SpeedEstimator, UnityStateEstimator
+from lsy_drone_racing.state_estimation import LowPassSpeedEstimator
 
 
 def test_low_pass_speed_estimator():

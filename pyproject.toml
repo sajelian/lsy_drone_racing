@@ -29,7 +29,12 @@ dependencies = [
 ]
 
 [tool.setuptools]
-packages = ["lsy_drone_racing", "controllers", "controllers.ppo"]
+packages = [
+    "lsy_drone_racing", 
+    "lsy_drone_racing.env_modifiers", 
+    "controllers",
+    "controllers.ppo"
+]
 
 [tool.ruff]
 # Exclude a variety of commonly ignored directories.

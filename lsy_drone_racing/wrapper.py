@@ -25,19 +25,13 @@ from typing import Any
 import numpy as np
 from gymnasium import Wrapper
 from gymnasium.error import InvalidAction
-from gymnasium.spaces import Box
 from rich.logging import RichHandler
 from safe_control_gym.controllers.firmware.firmware_wrapper import FirmwareWrapper
 from termcolor import colored
 
-from lsy_drone_racing.env_modifiers import (
-    ActionTransformer,
-    MinimalObservationParser,
-    ObservationParser,
-    RelativeActionTransformer,
-    RelativePositionObservationParser,
-    Rewarder,
-)
+from lsy_drone_racing.env_modifiers.action_transformer import ActionTransformer
+from lsy_drone_racing.env_modifiers.observation_parser import ObservationParser
+from lsy_drone_racing.env_modifiers.rewarder import Rewarder
 
 logging.basicConfig(
     level=logging.INFO,
@@ -82,47 +76,18 @@ class DroneRacingWrapper(Wrapper):
         self.env.render_mode = None
 
         # Observation space:
-        if observation_parser_path:
-            try:
-                self.observation_parser = ObservationParser.from_yaml(
-                    n_gates=env.env.NUM_GATES,
-                    n_obstacles=env.env.n_obstacles,
-                    file_path=observation_parser_path,
-                )
-            except Exception as e:
-                logger.error(f"Failed to load observation parser from YAML: {e}")
-                logger.error("Using default minimal observation parser.")
-                self.observation_parser = MinimalObservationParser(
-                    n_gates=env.env.NUM_GATES, n_obstacles=env.env.n_obstacles
-                )
-        else:
-            self.observation_parser = MinimalObservationParser(
-                n_gates=env.env.NUM_GATES, n_obstacles=env.env.n_obstacles
-            )
+        self.observation_parser = ObservationParser.from_yaml(
+            n_gates=env.env.NUM_GATES,
+            n_obstacles=env.env.n_obstacles,
+            file_path=observation_parser_path,
+        )
         self.observation_space = self.observation_parser.observation_space
 
         # Loading the rewarder
-        if rewarder_path:
-            try:
-                self.rewarder = Rewarder.from_yaml(rewarder_path)
-            except Exception as e:
-                logger.error(f"Failed to load rewarder from YAML: {e}")
-                logger.error("Using default rewarder.")
-                self.rewarder = Rewarder()
-        else:
-            self.rewarder = Rewarder()
+        self.rewarder = Rewarder.from_yaml(file_path=rewarder_path)
 
         # Loading the action transformer
-        if action_transformer_path:
-            try:
-                self.action_transformer = ActionTransformer.from_yaml(file_path=action_transformer_path)
-            except Exception as e:
-                logger.error(f"Failed to load action transformer from YAML: {e}")
-                logger.error("Using action transformer with relative actions.")
-                self.action_transformer = RelativeActionTransformer()
-
-        # Action space for the model. The action space is later transformed and finally converted to
-        # the firmware action.
+        self.action_transformer = ActionTransformer.from_yaml(file_path=action_transformer_path)
         self.action_space = self.action_transformer.get_action_space()
 
         self.pyb_client_id: int = env.env.PYB_CLIENT
@@ -183,7 +148,7 @@ class DroneRacingWrapper(Wrapper):
             raise InvalidAction(f"Invalid action: {action}")
 
         # Transform the action using a custom action transformer and then adapt it to the firmware
-        raw_action = action
+        # raw_action = action
         action = self.action_transformer.transform(raw_action=action, obs_parser=self.observation_parser)
         firmware_action = self.action_transformer.create_firmware_action(action, sim_time=self._sim_time)
         self.env.sendFullStateCmd(*firmware_action)
@@ -198,10 +163,6 @@ class DroneRacingWrapper(Wrapper):
         # final gate. We set terminated to True if the task is completed and the drone has passed
         # the final gate.
         terminated, truncated = False, False
-
-        drone_crashed = info["collision"][1]
-        passed_last_gate = info["current_gate_id"] == -1
-        task_completed = info["task_completed"]
 
         if info["task_completed"] and info["current_gate_id"] != -1:
             logger.info("Task completed but last gate not passed.")
@@ -290,10 +251,12 @@ class DroneRacingObservationWrapper:
         self.observation_parser = (
             observation_parser
             if observation_parser
-            else RelativePositionObservationParser(n_gates=env.env.NUM_GATES, n_obstacles=env.env.n_obstacles)
+            else ObservationParser.from_yaml(n_gates=env.env.NUM_GATES, n_obstacles=env.env.n_obstacles, file_path=None)
         )
         self.rewarder = rewarder if rewarder else Rewarder()
-        self.action_transformer = action_transformer if action_transformer else RelativeActionTransformer()
+        self.action_transformer = (
+            action_transformer if action_transformer else ActionTransformer.from_yaml(file_path=None)
+        )
 
     def __getattribute__(self, name: str) -> Any:
         """Get an attribute from the object.
@@ -341,6 +304,8 @@ class DroneRacingObservationWrapper:
         """Take a step in the current environment.
 
         Args:
+            sim_time: The simulation time.
+            action: The action to take.
             args: Positional arguments to pass to the firmware wrapper.
             kwargs: Keyword arguments to pass to the firmware wrapper.
 
