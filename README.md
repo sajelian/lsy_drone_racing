@@ -4,7 +4,7 @@ Check the original repository for further information.
 
 [💾 Install](docs/INSTALL.md)
 
-[👨‍💻 Code structure](docs/ARCHITECTURE.md)
+[👨‍💻 Code structure](docs/STRUCTURE.md)
 
 
 ## Difficulty levels
