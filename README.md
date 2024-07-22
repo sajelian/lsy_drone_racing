@@ -1,8 +1,9 @@
-# Autonomous Drone Racing Project - Haig and Daniel solution
+# Autonomous Drone Racing Project
 
 Check the original repository for further information.
 
-[Install](docs/INSTALL.md)
+[💾 Install](docs/INSTALL.md)
+[👨‍💻 Code structure](docs/ARCHITECTURE.md)
 
 
 ## Difficulty levels
