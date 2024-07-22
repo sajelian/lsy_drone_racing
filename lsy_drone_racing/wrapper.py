@@ -231,7 +231,7 @@ class DroneRacingWrapper(Wrapper):
             self._sim_time += self.env.ctrl_dt
 
         # Compute the custom reward
-        reward = self.rewarder.get_custom_reward(self.observation_parser, info, action=raw_action)
+        reward = self.rewarder.get_custom_reward(self.observation_parser, info, action=action)
 
         logger.debug("===Step===")
         logger.debug(f"Collision: {pprint.pformat(info['collision'])}")

@@ -1,0 +1,5 @@
+type: "gyro"
+n_gates_in_sight: 1
+normalized: True
+
+shortname: "gyro1"

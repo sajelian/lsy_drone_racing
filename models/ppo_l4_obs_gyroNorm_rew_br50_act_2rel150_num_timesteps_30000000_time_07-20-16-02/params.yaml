@@ -1,0 +1,9 @@
+action_transformer: config/action_transformer/double_relative_150.yaml
+gui: false
+level: config/level/level_train4.yaml
+model_name: models/ppo_l4_obs_gyroNorm_rew_br50_act_2rel150_num_timesteps_30000000_time_07-20-16-02/best_model/best_model
+model_type: ppo
+num_timesteps: 30000000
+observation_parser: config/observation_parser/gyro1_normalized.yaml
+rewarder: config/rewarder/body_rate50.yaml
+seed: 0

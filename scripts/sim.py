@@ -39,6 +39,7 @@ def simulate(
     gui: bool = True,
     terminate_on_lap: bool = True,
     log_level: str = "INFO",
+    clock_time: bool = True,
 ) -> list[float]:
     """Evaluate the drone controller over multiple episodes.
 
@@ -50,6 +51,7 @@ def simulate(
         gui: Enable/disable the simulation GUI.
         terminate_on_lap: Stop the simulation early when the drone has passed the last gate.
         log_level: The logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL).
+        clock_time: Synchronize the simulation with the real time.
 
     Returns:
         A list of episode times.
@@ -105,6 +107,8 @@ def simulate(
         "collision_objects": set(),
         "violations": 0,
         "gates_passed": 0,
+        "top_speed": 0,
+        "top_angular_speed": 0,
     }
     ep_times = []
 
@@ -114,6 +118,16 @@ def simulate(
         done = False
         action = np.zeros(4)
         reward = 0
+
+        p.resetDebugVisualizerCamera(
+            cameraDistance=0.5,
+            cameraYaw=0,
+            cameraPitch=-45,
+            cameraTargetPosition=[0, 0, 0],
+            physicsClientId=env.pyb_client_id,
+        )
+
+        
         obs, info = env.reset()
         #logger.info(info)
         info["ctrl_timestep"] = CTRL_DT
@@ -123,19 +137,12 @@ def simulate(
         ctrl = ctrl_class(obs, info, verbose=config.verbose, **controller_args)
         gui_timer = p.addUserDebugText("", textPosition=[0, 0, 1], physicsClientId=env.pyb_client_id)
         i = 0
+
+        top_speed = 0
+        top_angular_speed = 0
+
         while not done:
             curr_time = i * CTRL_DT
-            gui_timer = p.addUserDebugText(
-                "Ep. time: {:.2f}s".format(curr_time),
-                textPosition=[0, 0, 1.5],
-                textColorRGB=[1, 0, 0],
-                lifeTime=3 * CTRL_DT,
-                textSize=1.5,
-                parentObjectUniqueId=0,
-                parentLinkIndex=-1,
-                replaceItemUniqueId=gui_timer,
-                physicsClientId=env.pyb_client_id,
-            )
 
             # Get the observation from the motion capture system
             # Compute control input.
@@ -149,6 +156,31 @@ def simulate(
             kwargs = {"applied_transformed_action": applied_transformed_action} if applied_transformed_action else {}
             obs, reward, done, info, action = env.step(sim_time=curr_time, action=action, **kwargs)
             # Update the controller internal state and models.
+
+            follow_drone = True
+            # We place the camera to follow the drone
+            drone_pos = env.observation_parser.drone_pos
+            drone_rpy = env.observation_parser.drone_rpy
+
+            gui_timer = p.addUserDebugText(
+                "Ep. time: {:.2f}s".format(curr_time),
+                textPosition=[0, 0, 1.5] if not follow_drone else [drone_pos[0], drone_pos[1], drone_pos[2] + 0.2],
+                textColorRGB=[1, 0, 0],
+                lifeTime=3 * CTRL_DT,
+                textSize=2.5,
+                parentObjectUniqueId=0,
+                parentLinkIndex=-1,
+                replaceItemUniqueId=gui_timer,
+                physicsClientId=env.pyb_client_id,
+            )
+            p.resetDebugVisualizerCamera(
+                cameraDistance=0.5,
+                cameraYaw=drone_rpy[2],
+                cameraPitch=drone_rpy[1] - 45,
+                cameraTargetPosition=drone_pos,
+                physicsClientId=env.pyb_client_id,
+            )
+
             ctrl.step_learn(action, obs, reward, done, info)
             # Add up reward, collisions, violations.
             stats["ep_reward"] += reward
@@ -157,10 +189,18 @@ def simulate(
                 stats["collision_objects"].add(info["collision"][0])
             stats["violations"] += "constraint_violation" in info and info["constraint_violation"]
 
+            stats["top_speed"] = np.max([stats["top_speed"], np.linalg.norm(env.observation_parser.drone_speed)])
+            stats["top_angular_speed"] = np.max(
+                [stats["top_angular_speed"], np.linalg.norm(env.observation_parser.drone_angular_speed)]
+            )
+
 
             # Synchronize the GUI.
-            if config.quadrotor_config.gui:
-                sync(i, ep_start, CTRL_DT)
+            if clock_time:
+                wall_clock_duration = time.time() - ep_start
+                if wall_clock_duration > curr_time:
+                    time.sleep((wall_clock_duration - curr_time) / 1000.0)
+                
             i += 1
             # Break early after passing the last gate (=> gate -1) or task completion
             if terminate_on_lap and info["current_gate_id"] == -1:
@@ -180,6 +220,9 @@ def simulate(
         stats["collisions"] = 0
         stats["collision_objects"] = set()
         stats["violations"] = 0
+        stats["top_speed"] = 0
+        stats["top_angular_speed"] = 0
+
         ep_times.append(curr_time if info["current_gate_id"] == -1 else None)
 
     # Close the environment
@@ -208,6 +251,8 @@ def log_episode_stats(stats: dict, info: dict, config: Munch, curr_time: float, 
             f"Total reward: {stats['ep_reward']}\n"
             f"Number of collisions: {stats['collisions']}\n"
             f"Number of constraint violations: {stats['violations']}\n"
+            f"Top speed: {stats['top_speed']}\n"
+            f"Top angular speed: {stats['top_angular_speed']}\n"
         )
     )
 

@@ -31,7 +31,7 @@ from lsy_drone_racing.wrapper import DroneRacingObservationWrapper
 
 logger = logging.getLogger(__name__)
 
-N_RUNS = 1
+N_RUNS = 100
 """
 TODO:
 -comments, docstrings

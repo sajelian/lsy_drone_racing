@@ -6,7 +6,7 @@ end_reached: 3.0
 gate_reached: 3.0
 z_penalty: 0.0
 z_penalty_threshold: 1.75
-action_smoothness: 0.0001
+action_smoothness: 0.000 
 body_rate_penalty: -0.005
 
 shortname: "br50"

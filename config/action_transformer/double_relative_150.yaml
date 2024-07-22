@@ -1,0 +1,5 @@
+type: "double_relative"
+pos_scaling: [0.15, 0.15, 0.15]
+yaw_scaling: 0.0
+
+shortname: "2rel150"
