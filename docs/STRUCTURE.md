@@ -6,7 +6,7 @@
 
 The most important files are:
 
-- `env_modifiers/observation_parser.py`: includes the `ObservationParser` base class and all the child classes based on it.
+- `env_modifiers/observation_parser.py`: includes the `ObservationParser` base class and all the child classes based on it. There are a loooot of them, some need to be properly documented.
 - `env_modifiers/action_transformer.py`: includes the `ActionTransformer` base class and all the child classes based on it.
 - `env_modifiers/rewarder.py`: contains the rewarder `Rewarder`.
 
