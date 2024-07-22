@@ -34,14 +34,13 @@ from lsy_drone_racing.utils import load_controller
 from lsy_drone_racing.wrapper import DroneRacingObservationWrapper
 
 #TODO change fonts to Latex style
+plt.rcParams.update({'font.size': 16})
+
 
 logger = logging.getLogger(__name__)
 
-N_RUNS = 100
-N_AGENTS = 4
-
-OBSTACLE = None
-GATES = None
+N_RUNS = 50
+N_AGENTS = 1
 
 
 """
@@ -81,7 +80,7 @@ def plot_2d_trajectories(fig, ax, trajectories, collisions):
     """Plot the trajectories of drone runs."""
     plotted_collission = False
     plotted_success = False
-    alpha = 0.2
+    alpha = 0.3
     for trajectory_id, trajectory in enumerate(trajectories):
         trajectory = np.array(trajectory)
         if not plotted_collission and collisions[trajectory_id]:
@@ -145,7 +144,7 @@ def plot_gate_reached_percentage(ax, agents_gate_reached, model_names):
             positions,
             percentages,
             bar_width - 0.05,
-            label=f"Agent {model_names[agent_index]}",
+            label=f"{model_names[agent_index]}",
             color=colors_lst[agent_index],
         )
 
@@ -378,7 +377,7 @@ def simulate(
     env.close()
 
     # Plotting
-    # fig, ax = plt.subplots()
+    fig, ax = plt.subplots()
     # fig1, ax1 = plt.subplots()
     # fig2, ax2 = plt.subplots()
 
@@ -386,18 +385,18 @@ def simulate(
     OBSTACLES = config.quadrotor_config["obstacles"]
     GATES = config.quadrotor_config["gates"]
 
-    # plot_parcour(fig, ax, gates, obstacles)
-    # plot_2d_trajectories(fig, ax, trajectories, collisions)
+    plot_parcour(fig, ax, GATES, OBSTACLES)
+    plot_2d_trajectories(fig, ax, trajectories, collisions)
     # if len(ep_times) > 0:
     #     plot_violins(fig1, ax1, ep_times)
 
     # plot_gate_reached_percentage(fig2, ax2, gates_reached)
 
-    # fig.savefig("trajectories.pdf", bbox_inches="tight")
+    fig.savefig("trajectories.pdf", bbox_inches="tight")
     # fig1.savefig("laptimes.pdf", bbox_inches="tight")
     # fig2.savefig("gate_reached.pdf", bbox_inches="tight")
 
-    return ep_times, gate_reached, trajectories
+    return ep_times, gate_reached, trajectories, collisions
 
 
 def log_episode_stats(stats: dict, info: dict, config: Munch, curr_time: float, lap_finished: bool):
@@ -428,50 +427,50 @@ def log_episode_stats(stats: dict, info: dict, config: Munch, curr_time: float, 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
 
-    READ = True
-    RUN = False
+    READ = False
+    RUN = True
 
     # models to iterate over
+    # models = [
+    #     "ppo_l4_obs_actNorm_rew_beta_act_2rel25_num_timesteps_2000000_time_07-05-14-32",
+    #     "ppo_l4_obs_actNorm_rew_beta_act_2rel_num_timesteps_5000000_time_07-06-00-03",
+    #     "ppo_l4_obs_actNorm_rew_beta_act_2rel100_num_timesteps_5000000_time_07-06-23-40",
+    #     "ppo_l3_obs_act_rew_beta_act_2rel25_num_timesteps_5000000_time_07-01-22-47",
+    # ]
+
     models = [
-        "ppo_l4_obs_actNorm_rew_beta_act_2rel25_num_timesteps_2000000_time_07-05-14-32",
-        "ppo_l4_obs_actNorm_rew_beta_act_2rel_num_timesteps_5000000_time_07-06-00-03",
-        "ppo_l4_obs_actNorm_rew_beta_act_2rel100_num_timesteps_5000000_time_07-06-23-40",
-        "ppo_l3_obs_act_rew_beta_act_2rel25_num_timesteps_5000000_time_07-01-22-47",
+        "ppo_l4_obs_actNorm_rew_beta_act_2rel100_num_timesteps_5000000_time_07-06-23-40"
     ]
     
     # model names
-    model_names = ["2Rel25 ActNorm", "2Rel50 ActNorm", "2Rel100 ActNorm", "2Rel25 NoNorm"]
+    #model_names = ["$\gamma_0 = 0.025$", "$\gamma_0 = 0.05$", "$\gamma_0 = 0.1$", "$\gamma_0 = 0.025$ NonNorm"]
+    model_names = ["$\gamma_0 = 0.1$"]
 
     # Lists for plotting
     agents_laptimes = []
     agents_gate_reached = []
-    agents_trajectories = []
+    trajectories_lst = []
+    collisions_lst = []
+
 
     # plotting
     laptimes_fig, laptimes_ax = plt.subplots()
     gate_reached_fig, gate_reached_ax = plt.subplots()
-
-    # TODO Plot seperate trajectory fig for each model
-    #trajectories_figs = []
-    #trajectories_axs = []
-
-    #for i in range(N_AGENTS):
-    #    fig, ax = plt.subplots()
-    #    trajectories_figs.append(fig)
-    #    trajectories_axs.append(ax)
-
-
+    trajectories_fig, trajectories_ax = plt.subplots()
 
     if RUN:
         # for i, model in enumerate(models):
         for i in range(N_AGENTS):
             print(f"Model Iteration: {i}")
 
-            laptimes, gate_reached, trajectories = simulate(models[i])
+            laptimes, gate_reached, trajectories, collisions = simulate(models[i])
 
             agents_laptimes.append(laptimes)
             agents_gate_reached.append(gate_reached)
-            agents_trajectories.append(trajectories)
+
+            if i == 2:
+                trajectories_lst = trajectories
+                collisions_lst = collisions
 
         # safe to csv
         for i, laptimes in enumerate(agents_laptimes):
@@ -479,9 +478,6 @@ if __name__ == "__main__":
 
         for i, gate_reached in enumerate(agents_gate_reached):
             np.savetxt(f"agent{i}_gate_reached.csv", gate_reached, delimiter=",")
-
-        for i, trajectories in enumerate(agents_trajectories):
-            np.savetxt(f"agent{i}_trajectories.csv", trajectories, delimiter=",")
 
     if READ:
         # read laptime data from csv file
@@ -510,16 +506,17 @@ if __name__ == "__main__":
                 agents_gate_reached.append(gate_reached)
 
     # call plotting functions
-    plot_violins(laptimes_ax, agents_laptimes, model_names)
-    plot_gate_reached_percentage(gate_reached_ax, agents_gate_reached, model_names)
-    #TODO plotting trajectories
-
+    #plot_violins(laptimes_ax, agents_laptimes, model_names)
+    #plot_gate_reached_percentage(gate_reached_ax, agents_gate_reached, model_names)
+    #plot_parcour(trajectories_fig, trajectories_ax, GATES, OBSTACLE)
+    #plot_2d_trajectories(trajectories_fig, trajectories_ax, trajectories_lst, collisions_lst)
 
     # safe figs
-    laptimes_fig.autofmt_xdate()
-    gate_reached_fig.autofmt_xdate()
-    laptimes_fig.savefig("laptimes.pdf", bbox_inches="tight")
-    gate_reached_fig.savefig("gate_reached.pdf", bbox_inches="tight")
+    #laptimes_fig.autofmt_xdate()
+    #gate_reached_fig.autofmt_xdate()
+    #laptimes_fig.savefig("laptimes.pdf", bbox_inches="tight")
+    #gate_reached_fig.savefig("gate_reached.pdf", bbox_inches="tight")
+    #trajectories_fig.savefig("trajectories.pdf", bbox_inches="tight")
     
     #for i, fig in enumerate(trajectories_figs):
     #    fig.savefig(f"agent{i}_trajectory.pdf", bbox_inches="tight")
