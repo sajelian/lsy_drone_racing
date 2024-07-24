@@ -33,7 +33,8 @@ Next, download the `safe-control-gym` and `pycffirmware` repositories and instal
 
 ```bash
 cd ~/repos
-git clone -b lsy_drone_racing https://github.com/utiasDSL/safe-control-gym.git
+# git clone -b lsy_drone_racing https://github.com/utiasDSL/safe-control-gym.git
+git clone -b lsy_drone_racing https://github.com/danielsanjosepro/safe-control-gym.git
 cd safe-control-gym
 pip install .
 ```
