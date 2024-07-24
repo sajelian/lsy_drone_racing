@@ -2,7 +2,9 @@
 
 To run the LSY Autonomous Drone Racing project, you will need 3 main repositories:
 - [safe-control-gym](https://github.com/utiasDSL/safe-control-gym/tree/lsy_drone_racing) - `lsy_drone_racing` branch: The drone simulator and gym environments
+
 _UPDATE:_ use https://github.com/danielsanjosepro/safe-control-gym fork for levels that have array init states in the configuration, so that you can start drones at different locations.
+
 - [pycffirmware](https://github.com/utiasDSL/pycffirmware) - `main` branch: A simulator for the on-board controller response of the drones we are using to accurately model their behavior
 - [lsy_drone_racing](https://github.com/utiasDSL/lsy_drone_racing) - `main` branch: This repository contains the scripts to simulate and deploy the drones in the racing challenge
 
