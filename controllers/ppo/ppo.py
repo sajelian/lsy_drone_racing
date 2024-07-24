@@ -14,7 +14,7 @@ from lsy_drone_racing.env_modifiers.action_transformer import ActionTransformer
 
 if TYPE_CHECKING:
     from lsy_drone_racing.command import Command
-    from lsy_drone_racing.observation.observation_parser import ObservationParser
+    from lsy_drone_racing.env_modifiers.observation_parser import ObservationParser
 
 logger = logging.getLogger(__name__)
 

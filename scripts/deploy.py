@@ -34,7 +34,9 @@ from lsy_drone_racing.constants import (
     ObstacleDesc,
     QuadrotorPhysicParams,
 )
-from lsy_drone_racing.env_modifiers import ActionTransformer, ObservationParser, Rewarder
+from lsy_drone_racing.env_modifiers.action_transformer import ActionTransformer
+from lsy_drone_racing.env_modifiers.observation_parser import ObservationParser
+from lsy_drone_racing.env_modifiers.rewarder import Rewarder
 from lsy_drone_racing.import_utils import get_ros_package_path, pycrazyswarm
 from lsy_drone_racing.utils import check_gate_pass, load_controller
 from lsy_drone_racing.vicon import Vicon

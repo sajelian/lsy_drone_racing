@@ -31,9 +31,9 @@ class DroneStateMachine:
         initial_goal: np.ndarray,
         model: Any,
         action_transformer: ActionTransformer,
-        only_policy: bool = True,
+        only_policy: bool = False,
         takeoff_duration: float = 1.0,
-        takeoff_height: float = 0.4,
+        takeoff_height: float = 0.5,
         landing_duration: float = 10.0,
         go_to_stabilization_duration: float = 3.0,
     ):
