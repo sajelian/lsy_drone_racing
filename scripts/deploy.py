@@ -90,7 +90,7 @@ def create_init_info(
 def main(
     config: str = "config/train0_standard.yaml",
     controller: str = "controllers/ppo/ppo.py",
-    controller_params: str = "models/ppo_l4_obs_gyro1Norm_rew_br50_act_2rel150_num_timesteps_30000000_time_07-21-16-06/params.yaml",
+    controller_params: str = "models/ppo_l4_obs_actNorm_rew_beta_act_2rel25_num_timesteps_2000000_time_07-05-14-32/params.yaml",
 ):
     """Deployment script to run the controller on the real drone."""
     start_time = time.time()
@@ -194,7 +194,8 @@ def main(
     init_info["obstacles_in_range"] = False
     init_info["gates_in_range"] = False
 
-    observation_parser.update(obs=vicon_obs, info=init_info, initial=True)
+    previous_transformed_action = None
+    observation_parser.update(obs=vicon_obs, info=init_info, initial=True, action=previous_transformed_action)
 
     try:
         # Run the main control loop
@@ -258,11 +259,13 @@ def main(
             w = vicon.ang_vel[vicon.drone_name]
             drone_rot_and_agl_vel = [r[0], r[1], r[2], w[0], w[1], w[2]]
             vicon_obs = drone_pos_and_vel + drone_rot_and_agl_vel + [info["current_target_gate_id"]]
-            observation_parser.update(obs=vicon_obs, info=info)
+            observation_parser.update(obs=vicon_obs, info=info, previous_action=ctrl.last_action)
             # In sim2real: Reward always 0, done always false
 
             command_type, args = ctrl.compute_control(curr_time, observation_parser, 0, False, info)
             log_cmd.append([curr_time, rospy.get_time(), command_type, args])  # Save for logging
+            if command_type == Command.FULLSTATE:
+                previous_transformed_action = [*(args[0].tolist()), args[3]]
 
             apply_command(cf, command_type, args)  # Send the command to the drone controller
             time_helper.sleepForRate(CTRL_FREQ)

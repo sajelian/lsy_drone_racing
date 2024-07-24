@@ -105,6 +105,7 @@ def simulate(
     env_func = partial(make, "quadrotor", **config.quadrotor_config)
     env = DroneRacingObservationWrapper(make("firmware", env_func, FIRMWARE_FREQ, CTRL_FREQ), **extra_env_args)
 
+
     # Create a statistics collection
     stats = {
         "ep_reward": 0,
@@ -142,6 +143,8 @@ def simulate(
         gui_timer = p.addUserDebugText("", textPosition=[0, 0, 1], physicsClientId=env.pyb_client_id)
         i = 0
 
+        step_extra_args = {}
+
         while not done:
             curr_time = i * CTRL_DT
 
@@ -153,9 +156,9 @@ def simulate(
             applied_transformed_action = None
             if command_type == Command.FULLSTATE:
                 applied_transformed_action = [*(args[0].tolist()), args[3]]
+                step_extra_args = {"applied_transformed_action": applied_transformed_action} if applied_transformed_action else {}
             apply_sim_command(env, command_type, args)
-            kwargs = {"applied_transformed_action": applied_transformed_action} if applied_transformed_action else {}
-            obs, reward, done, info, action = env.step(sim_time=curr_time, action=action, **kwargs)
+            obs, reward, done, info, action = env.step(sim_time=curr_time, action=action, **step_extra_args)
             # Update the controller internal state and models.
 
             follow_drone = True
